@@ -179,8 +179,10 @@ class StrategySpec(BaseModel):
         default="long",
         description="Long only. Retail cannot hold short equity overnight in India.")
 
-    rank_by: Literal["recency", "spread", "turnover"] = "recency"
-    max_signals: int = Field(default=25, ge=1, le=100)
+    rank_by: Literal["recency", "turnover"] = "recency"
+    # Default high enough that a Nifty-100 daily scan is not silently
+    # truncated. When the cap does bite, the API and the UI say so.
+    max_signals: int = Field(default=100, ge=1, le=500)
     lookback_bars: int = Field(
         default=15, ge=1, le=250,
         description="Only report signals that fired within this many bars.")

@@ -266,3 +266,66 @@ def test_varsity_default_round_trips_through_json():
     back = StrategySpec.model_validate_json(raw)
     assert back == VARSITY_DEFAULT
     assert "SMA(6) crosses above SMA(30)" in back.entry.describe()
+
+
+# --------------------------------------------------------------------------
+# 6. THE CAP MUST NOT LIE
+# --------------------------------------------------------------------------
+def test_truncation_is_reported_not_silent():
+    """max_signals caps the rows returned. The counts must still describe ALL
+    signals found, and the number dropped must be stated.
+
+    Regression: the counts were computed from the truncated table, so a scan
+    that found 20 entries reported 4 and the order sheet sized from those 4.
+    """
+    store = make_panel(n_days=600, n_syms=14, seed=5, gaps=False)
+    loose = StrategySpec(name="loose", lookback_bars=200, max_signals=500,
+                         min_median_turnover=0,
+                         entry=Crossover(left=SMA(period=6), right=SMA(period=30),
+                                         direction="above"))
+    full = run_spec(loose, store)
+    assert len(full) > 4, "fixture did not produce enough signals to test the cap"
+
+    capped = run_spec(loose.model_copy(update={"max_signals": 3}), store)
+    a = capped.attrs
+    assert len(capped) == 3
+    assert a["total"] == len(full)
+    assert a["shown"] == 3
+    assert a["dropped"] == len(full) - 3
+    # the headline counts describe everything found, not just what is shown
+    assert a["total_entry"] == int((full["side"] == "ENTRY").sum())
+    assert a["total_exit"] == int((full["side"] == "EXIT").sum())
+
+
+def test_uncapped_scan_reports_zero_dropped():
+    store = make_panel(n_days=600, n_syms=8, seed=6, gaps=False)
+    spec = StrategySpec(name="x", max_signals=500, min_median_turnover=0,
+                        entry=Crossover(left=SMA(period=6), right=SMA(period=30),
+                                        direction="above"))
+    t = run_spec(spec, store)
+    assert t.attrs["dropped"] == 0
+    assert t.attrs["shown"] == t.attrs["total"] == len(t)
+
+
+def test_empty_result_still_carries_counts():
+    """An empty table must not KeyError the caller."""
+    store = make_panel(n_days=120, n_syms=4, gaps=False)
+    spec = StrategySpec(name="impossible", lookback_bars=1,
+                        entry=Comparison(left=RSI(period=14), op="<",
+                                         right=Constant(value=-999)))
+    t = run_spec(spec, store)
+    assert t.empty
+    for k in ("total", "total_entry", "total_exit", "shown", "dropped"):
+        assert k in t.attrs
+
+
+def test_spread_rank_mode_is_gone():
+    """The DSL advertised rank_by='spread' but the engine treated it as
+    recency. A closed language must not offer a mode it does not implement."""
+    import pydantic
+    with pytest.raises(pydantic.ValidationError):
+        StrategySpec.model_validate({
+            "name": "x", "rank_by": "spread",
+            "entry": {"type": "crossover", "direction": "above",
+                      "left": {"kind": "sma", "period": 6},
+                      "right": {"kind": "sma", "period": 30}}})

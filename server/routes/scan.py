@@ -98,6 +98,12 @@ def scan(body: ScanBody) -> dict:
 
     close = panel["close"]
     asof = close.index[-1]
+    a = table.attrs
+    dropped = int(a.get("dropped", 0))
+    if dropped:
+        log.info("scan produced %d signals, showing %d (max_signals=%d)",
+                 a.get("total"), a.get("shown"), spec.max_signals)
+
     return {
         "spec": spec.model_dump(mode="json"),
         "summary": spec.describe(),
@@ -107,10 +113,15 @@ def scan(body: ScanBody) -> dict:
         "bars": close.shape[0],
         "missing_symbols": missing,
         "signals": table.to_dict("records") if not table.empty else [],
+        # Counts are for ALL signals found, not just the rows returned.
         "counts": {
-            "entry": int((table["side"] == "ENTRY").sum()) if not table.empty else 0,
-            "exit": int((table["side"] == "EXIT").sum()) if not table.empty else 0,
+            "entry": int(a.get("total_entry", 0)),
+            "exit": int(a.get("total_exit", 0)),
         },
+        "shown": int(a.get("shown", 0)),
+        "total": int(a.get("total", 0)),
+        "dropped": dropped,
+        "max_signals": spec.max_signals,
     }
 
 

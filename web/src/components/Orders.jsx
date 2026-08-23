@@ -168,8 +168,10 @@ export default function Orders({ config, scan, onConfigChange }) {
                                   {res.status} · {res.order_id}
                                 </span>
                           ) : (
-                            <button className="btn danger"
+                            <button className={`btn ${tradingOn && kiteLive ? 'danger' : 'ghost'}`}
                                     style={{ fontSize: 12.5, padding: '6px 12px' }}
+                                    title={!tradingOn ? 'ENABLE_TRADING is false'
+                                           : !kiteLive ? 'Not connected to Kite' : ''}
                                     disabled={!tradingOn || !kiteLive
                                               || placing === o.confirm_token}
                                     onClick={() => place(o)}>

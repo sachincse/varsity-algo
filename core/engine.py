@@ -241,17 +241,31 @@ def run_spec(spec: StrategySpec, panel: dict,
 
     df = pd.DataFrame(rows)
     if df.empty:
-        return df
+        empty = pd.DataFrame(columns=["symbol", "side", "signal_date",
+                                      "bars_since", "price", "price_date",
+                                      "median_turnover_cr"])
+        empty.attrs.update(total=0, total_entry=0, total_exit=0,
+                           shown=0, dropped=0)
+        return empty
 
-    if spec.rank_by == "recency":
-        df = df.sort_values(["bars_since", "symbol"])
-    elif spec.rank_by == "turnover":
+    if spec.rank_by == "turnover":
         df = df.sort_values(["median_turnover_cr", "bars_since"],
                             ascending=[False, True])
-    else:                                    # spread
+    else:                                    # recency
         df = df.sort_values(["bars_since", "symbol"])
 
-    return df.head(spec.max_signals).reset_index(drop=True)
+    # Record the FULL counts before the cap. Reporting counts from the
+    # truncated table is how a scanner quietly tells you there are 4 buy
+    # candidates when there are 20 — the cap has to be visible or it is a lie.
+    total = len(df)
+    total_entry = int((df["side"] == "ENTRY").sum())
+    total_exit = int((df["side"] == "EXIT").sum())
+
+    out = df.head(spec.max_signals).reset_index(drop=True)
+    out.attrs.update(total=total, total_entry=total_entry,
+                     total_exit=total_exit, shown=len(out),
+                     dropped=total - len(out))
+    return out
 
 
 def warmup_bars(spec: StrategySpec) -> int:

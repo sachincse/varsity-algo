@@ -288,7 +288,38 @@ There is no ExecutionPolicy problem, and `&&` works.
 | `provider does not know the model` | The model ID was retired. Set `LLM_MODEL` to a current one |
 | `The 'x' provider is not configured` | Key missing from `.env`, or the backend was not restarted after you added it |
 | Ollama shows "not running" | Run `ollama serve`, and `ollama list` to confirm a model is pulled |
-| Port 8000 already in use | An old backend is still running. Close it, or use `--port 8001` |
+| Port 8000 already in use | An old backend is still running — see below |
+| You changed `.env` but nothing changed | Almost always the same stale-process problem — see below |
+
+### The stale-backend trap on Windows
+
+This one cost me an hour while building it, so it is worth its own section.
+
+On Windows, closing a terminal or pressing Ctrl+C does not always kill the
+`uvicorn` process. Start the server again and it silently fails to bind, and
+**the old process keeps answering on port 8000** — running the old code, with
+the old `.env`. You edit a setting, restart, and see no change, because you are
+still talking to the process from twenty minutes ago.
+
+Git Bash's `pkill -f uvicorn` does **not** work for this. Use the real thing:
+
+```powershell
+# see what is holding the port
+netstat -ano | findstr :8000
+
+# the last column is the PID — kill it
+taskkill /F /PID <pid>
+```
+
+Or kill every Python process, which is blunt but effective:
+
+```powershell
+taskkill /F /IM python.exe
+```
+
+The backend prints its configuration on startup — provider, Kite key present or
+not, price source. If those lines do not match your `.env`, you are looking at a
+stale process, not a bug.
 
 Anything else: the backend window prints the real error. That is the one worth
 reading.

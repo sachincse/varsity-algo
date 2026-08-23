@@ -55,6 +55,17 @@ export default function Signals({ spec, summary, scan, onScan, goToOrders }) {
             <div><span>Source</span><b style={{ fontSize: 15 }}>{scan.source}</b></div>
           </div>
 
+          {scan.dropped > 0 && (
+            <div className="msg warn">
+              <strong>Showing {scan.shown} of {scan.total} signals.</strong>{' '}
+              {scan.dropped} more were found and are not listed, because the
+              strategy's <code>max_signals</code> is set to {scan.max_signals}.
+              The Entries and Exits counts above are for all {scan.total}. Raise{' '}
+              <code>max_signals</code> on the Strategy tab to see the rest — and
+              note the order sheet is built only from what is listed here.
+            </div>
+          )}
+
           {scan.missing_symbols?.length > 0 && (
             <div className="msg warn">
               No price data for {scan.missing_symbols.length} symbol
