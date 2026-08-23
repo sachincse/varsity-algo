@@ -1,0 +1,10 @@
+.env
+.venv/
+data/cache/
+data/*.csv
+__pycache__/
+*.pyc
+.pytest_cache/
+web/node_modules/
+web/dist/
+*.log

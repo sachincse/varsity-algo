@@ -1,0 +1,22 @@
+{
+  "name": "varsity-algo-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dev:api": "python -m uvicorn server.main:app --reload --port 8000 --app-dir ..",
+    "dev:all": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "vite": "^6.0.7"
+  }
+}

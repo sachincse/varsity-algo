@@ -1,0 +1,21 @@
+# backend
+fastapi[standard]>=0.141.1
+python-dotenv>=1.0
+
+# data + engine
+pandas>=2.2
+numpy>=1.26
+yfinance>=1.6
+requests>=2.31
+pydantic>=2.9
+
+# broker
+kiteconnect>=5.2
+
+# LLM providers — anthropic uses its own SDK, everything else is
+# OpenAI-compatible and goes through the openai client
+anthropic>=0.40
+openai>=1.60
+
+# tests
+pytest>=8.0
