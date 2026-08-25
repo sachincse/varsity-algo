@@ -3,7 +3,7 @@ fastapi[standard]>=0.141.1
 python-dotenv>=1.0
 
 # data + engine
-pandas>=2.2
+pandas>=3.0.5
 numpy>=1.26
 yfinance>=1.6
 requests>=2.31
