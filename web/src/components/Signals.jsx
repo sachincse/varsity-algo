@@ -5,13 +5,15 @@ export default function Signals({ spec, summary, scan, onScan, goToOrders }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [refresh, setRefresh] = useState(false)
+  const [prog, setProg] = useState(null)
 
   async function run() {
     if (!spec) { setErr('Pick a strategy on the Strategy tab first.'); return }
-    setBusy(true); setErr('')
+    setBusy(true); setErr(''); setProg(null)
     try {
-      onScan(await api.scan(spec, { refresh }))
-    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+      const result = await api.scanWithProgress(spec, { refresh }, setProg)
+      onScan(result)
+    } catch (e) { setErr(e.message) } finally { setBusy(false); setProg(null) }
   }
 
   return (
@@ -36,10 +38,21 @@ export default function Signals({ spec, summary, scan, onScan, goToOrders }) {
           </label>
         </div>
         {busy && (
-          <p className="muted" style={{ marginTop: 12 }}>
-            First run downloads a few hundred symbols and takes a couple of
-            minutes. Afterwards it is cached and near-instant.
-          </p>
+          <div style={{ marginTop: 16 }}>
+            <div className="bar"><div className="bar-fill" style={{
+              width: prog?.percent != null ? prog.percent + '%' : '100%',
+              animation: prog?.percent == null ? 'pulse 1.2s ease-in-out infinite' : 'none',
+            }} /></div>
+            <p className="muted" style={{ marginTop: 8 }}>
+              {prog?.message || 'starting…'}
+              {prog?.percent != null ? ` — ${prog.percent}%` : ''}
+              {prog?.elapsed != null ? ` · ${Math.round(prog.elapsed)}s` : ''}
+            </p>
+            <p className="muted" style={{ marginTop: 4, fontSize: 12.5 }}>
+              The first run downloads every symbol in the universe and takes a
+              few minutes. After that it is cached and near-instant.
+            </p>
+          </div>
         )}
         {err && <div className="msg err" style={{ marginTop: 14 }}>{err}</div>}
       </div>

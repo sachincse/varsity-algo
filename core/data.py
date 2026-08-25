@@ -149,7 +149,7 @@ def load_panel_yf(symbols: list[str], bars_needed: int, interval: str = "day",
             missing.append(s)
         else:
             frames[s] = df
-        if progress and i % 20 == 0:
+        if progress and (i % 5 == 0 or i == len(symbols)):
             progress(i, len(symbols), len(missing))
 
     if not frames:
@@ -217,7 +217,7 @@ def load_panel_kite(kite, symbols: list[str], bars_needed: int,
         if interval == "day":
             df.index = df.index.normalize()
         frames[sym] = df[["open", "high", "low", "close", "volume"]]
-        if progress and i % 10 == 0:
+        if progress and (i % 3 == 0 or i == len(symbols)):
             progress(i, len(symbols), len(missing))
 
     if not frames:

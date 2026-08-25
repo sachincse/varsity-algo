@@ -33,92 +33,83 @@ found.
 
 ---
 
-## Step 1 — Get the code and create a virtual environment
+## Step 1 — Get the code
+
+Either download the ZIP from the GitHub page (**Code → Download ZIP**) and
+unzip it, or if you have git:
 
 ```powershell
-cd $HOME\codes\varsity-algo
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+git clone https://github.com/sachincse/varsity-algo
+cd varsity-algo
 ```
 
-Your prompt should now start with `(.venv)`.
+---
 
-### If Activate.ps1 fails
+## Step 2 — Start it
 
-You will see something like *"cannot be loaded because running scripts is
-disabled on this system"*. This is Windows' default and it blocks about half of
-all first-time setups. Fix it once, for your user only:
+**Double-click `start.bat`.**
+
+That is genuinely it. The script will:
+
+1. check you have Python, and tell you exactly what to do if you do not
+2. create a private virtual environment inside the folder
+3. install the Python packages (a few minutes, once)
+4. build the dashboard
+5. open <http://localhost:8000> in your browser
+
+Leave the black window open — that is the app running. Press `Ctrl+C` in it to
+stop. Running `start.bat` again later is fast, because it skips anything already
+done.
+
+On macOS or Linux, run `chmod +x start.sh && ./start.sh` instead.
+
+### If you would rather do it by hand
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cd web ; npm install ; npm run build ; cd ..
+python -m uvicorn server.main:app --port 8000
+```
+
+If `Activate.ps1` fails with *"running scripts is disabled on this system"* —
+that is Windows' default and it blocks a lot of first-time setups. Fix it once,
+for your user only:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-Answer `Y`, then run the activate command again. This does not weaken anything
-meaningful — it allows locally-created scripts to run for your account.
+Answer `Y`, then try again. Or use `cmd.exe`, where
+`.venv\Scripts\activate.bat` works with no policy change.
 
-If you would rather not change it at all, use `cmd.exe` instead:
-
-```cmd
-.venv\Scripts\activate.bat
-```
+> PowerShell 5.1 — the Windows 11 default — has no `&&`. Use `;` or separate
+> lines. `$PSVersionTable.PSVersion` tells you which you are in.
 
 ---
 
-## Step 2 — Install the Python side
+## Step 3 — Your first scan
 
-With `(.venv)` showing:
+Go to **Strategy**, click **"Use the video's SMA 6/30"**, then **Signals** →
+**Run scan**.
 
-```powershell
-pip install -r requirements.txt
-```
+The first scan downloads prices for every stock in the universe and takes a few
+minutes. You will see a progress bar and a running count — it is not stuck. After
+that it is cached and near-instant.
 
-Takes two or three minutes. Then check it worked:
+You now have the scanner from the video, with no Zerodha subscription and no API
+keys. **You can stop here.** Steps 4 and 5 add your broker account and the
+plain-English strategy builder.
 
-```powershell
-python -m pytest tests\ -q
-```
-
-You should see **40 passed**. Those tests prove the strategy engine cannot see
-future prices — worth running once so you know the thing you are about to trust
-was actually checked.
-
----
-
-## Step 3 — Start it up
-
-Two servers need to run: the Python backend and the web frontend.
-
-**The easy way** — double-click `dev.bat` in the project folder. Two windows
-open, one per server. Leave both open.
-
-**Or, from PowerShell**, in two separate windows:
+To check everything installed correctly:
 
 ```powershell
-# window 1 — backend
-cd $HOME\codes\varsity-algo
-.\.venv\Scripts\Activate.ps1
-python -m uvicorn server.main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m pytest tests\ -q
 ```
 
-```powershell
-# window 2 — frontend
-cd $HOME\codes\varsity-algo\web
-npm install
-npm run dev
-```
-
-> PowerShell 5.1 — the Windows 11 default — does not support `&&` between
-> commands. Use separate lines, or a semicolon. If you want `&&`, install
-> PowerShell 7 and use `pwsh`.
-
-Now open **http://localhost:5173**.
-
-Go to the **Strategy** tab, click **"Use the video's SMA 6/30"**, then
-**Signals** → **Run scan**.
-
-The first scan downloads prices for a few hundred stocks and takes two or three
-minutes. After that it is cached and near-instant. You now have the video's
-scanner, with no Zerodha subscription and no API keys.
+You should see **44 passed**. Those tests prove the engine cannot see future
+prices — worth running once, since you are about to trust it.
 
 ---
 

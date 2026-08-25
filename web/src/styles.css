@@ -162,3 +162,11 @@ td.n, th.n { text-align: right; font-family: ui-monospace, Consolas, monospace;
                  color: var(--ink-3); margin-top: 5px; word-break: break-all; }
 .provider .nt { font-size: 12px; color: var(--ink-3); margin-top: 7px; line-height: 1.45; }
 a { color: var(--accent); }
+
+/* progress bar for long scans */
+.bar { height: 7px; background: var(--sunk); border-radius: 999px;
+       overflow: hidden; border: 1px solid var(--rule); }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 999px;
+            transition: width .4s ease; }
+@keyframes pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .bar-fill { animation: none !important } }

@@ -1,0 +1,575 @@
+"""Assemble the tutorial video from recorded clips + generated cards.
+
+    python tools/record_app.py --out build/clips     # capture the real app
+    python tools/build_video.py                      # produce build/varsity-algo-tutorial.mp4
+
+Design notes that matter for a SOFTWARE tutorial specifically:
+
+* Output is 1600x900, the native capture size. Upscaling to 1080p would only
+  soften the UI text, which is the entire point of the video.
+* Captions are rendered as PNG strips in PIL and composited with ffmpeg's
+  overlay filter, rather than drawtext. drawtext on Windows means escaping a
+  drive-letter colon inside a filter argument, and gives far less typographic
+  control than PIL.
+* The "thinking" stretch while a local model answers is sped up rather than
+  cut, so viewers see that it takes real time without sitting through it.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+ROOT = Path(__file__).resolve().parent.parent
+BUILD = ROOT / "build"
+CLIPS = BUILD / "clips"
+WORK = BUILD / "work"
+OUT = BUILD / "varsity-algo-tutorial.mp4"
+
+W, H = 1600, 900
+FPS = 25
+
+# palette — matches the app so cards and screencast feel like one thing
+BG = (14, 16, 19)
+PANEL = (23, 26, 31)
+INK = (230, 233, 238)
+INK2 = (170, 178, 191)
+INK3 = (120, 129, 143)
+ACCENT = (90, 169, 221)
+BUY = (76, 186, 139)
+SELL = (224, 122, 104)
+WARN = (212, 164, 78)
+RULE = (38, 43, 51)
+
+F = "C:/Windows/Fonts/"
+
+
+def font(name: str, size: int):
+    return ImageFont.truetype(F + name, size)
+
+
+UI = lambda s: font("segoeui.ttf", s)
+UIB = lambda s: font("segoeuib.ttf", s)
+UIL = lambda s: font("segoeuil.ttf", s)
+MONO = lambda s: font("CascadiaMono.ttf", s)
+
+
+def run(args: list[str]) -> None:
+    r = subprocess.run(args, capture_output=True, text=True)
+    if r.returncode != 0:
+        print("FFMPEG FAILED:", " ".join(args[:9]), "...")
+        print(r.stderr[-2500:])
+        sys.exit(1)
+
+
+def probe_duration(p: Path) -> float:
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "csv=p=0", str(p)], capture_output=True, text=True)
+    return float(r.stdout.strip())
+
+
+# ==========================================================================
+# Cards
+# ==========================================================================
+def wrap(draw, text: str, fnt, max_w: int) -> list[str]:
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        t = (cur + " " + w).strip()
+        if draw.textlength(t, font=fnt) <= max_w:
+            cur = t
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def card(path: Path, *, eyebrow="", title="", body="", bullets=None,
+         mono=None, accent=ACCENT, big=None) -> None:
+    """A full-frame card. Measured first, then drawn vertically centred —
+    content pinned to the top of a 900px frame reads as a mistake."""
+    img = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(img)
+    x = 150
+    inner = W - 2 * x
+
+    title_lines = wrap(d, title, UIB(58), inner) if title else []
+    body_lines = wrap(d, body, UIL(30), inner - 60) if body else []
+    bullet_lines = [wrap(d, b, UI(28), inner - 46) for b in (bullets or [])]
+    mono_lines = (mono if isinstance(mono, list) else [mono]) if mono else []
+
+    h = 0
+    if eyebrow:
+        h += 46
+    if title_lines:
+        h += 74 * len(title_lines) + 14
+    if big:
+        h += 130
+    if body_lines:
+        h += 45 * len(body_lines) + 14
+    for bl in bullet_lines:
+        h += 42 * len(bl) + 12
+    if mono_lines:
+        h += 34 * len(mono_lines) + 52
+
+    y = max(120, (H - h) // 2 - 20)
+
+    if eyebrow:
+        d.text((x, y), eyebrow.upper(), font=UIB(19), fill=accent)
+        y += 46
+    for ln in title_lines:
+        d.text((x, y), ln, font=UIB(58), fill=INK)
+        y += 74
+    if title_lines:
+        y += 14
+    if big:
+        d.text((x, y), big, font=MONO(96), fill=accent)
+        y += 130
+    for ln in body_lines:
+        d.text((x, y), ln, font=UIL(30), fill=INK2)
+        y += 45
+    if body_lines:
+        y += 14
+    for bl in bullet_lines:
+        d.ellipse([x + 4, y + 14, x + 12, y + 22], fill=accent)
+        for ln in bl:
+            d.text((x + 32, y), ln, font=UI(28), fill=INK2)
+            y += 42
+        y += 12
+    if mono_lines:
+        by0 = y + 8
+        bh = 34 * len(mono_lines) + 44
+        d.rounded_rectangle([x, by0, W - x, by0 + bh], 10,
+                            fill=PANEL, outline=RULE, width=1)
+        ty = by0 + 22
+        for ln in mono_lines:
+            col = INK3 if ln.strip().startswith("#") else INK
+            d.text((x + 26, ty), ln, font=MONO(24), fill=col)
+            ty += 34
+
+    d.rectangle([0, H - 5, W, H], fill=accent)
+    img.save(path)
+
+
+def caption_strip(path: Path, text: str, sub: str = "", accent=ACCENT) -> None:
+    """A lower-third caption with an alpha channel, for overlay."""
+    pad, radius = 30, 12
+    tmp = Image.new("RGBA", (10, 10)); dtmp = ImageDraw.Draw(tmp)
+    fnt, sfnt = UIB(31), UI(23)
+    lines = wrap(dtmp, text, fnt, W - 300)
+    slines = wrap(dtmp, sub, sfnt, W - 300) if sub else []
+
+    h = pad * 2 + 42 * len(lines) + (32 * len(slines) + 8 if slines else 0)
+    img = Image.new("RGBA", (W, h + 20), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([70, 0, W - 70, h], radius, fill=(14, 16, 19, 234))
+    d.rounded_rectangle([70, 0, 76, h], 3, fill=accent + (255,))
+
+    y = pad - 4
+    for ln in lines:
+        d.text((104, y), ln, font=fnt, fill=INK + (255,))
+        y += 42
+    if slines:
+        y += 6
+        for ln in slines:
+            d.text((104, y), ln, font=sfnt, fill=INK2 + (255,))
+            y += 32
+    img.save(path)
+
+
+# ==========================================================================
+# Terminal typing animation
+# ==========================================================================
+def terminal_clip(out: Path, title: str, lines: list[tuple[str, str]],
+                  hold: float = 2.2) -> Path:
+    """lines = [(kind, text)] where kind is 'cmd' | 'out' | 'ok' | 'note'."""
+    frames = WORK / ("term_" + out.stem)
+    if frames.exists():
+        shutil.rmtree(frames)
+    frames.mkdir(parents=True)
+
+    base = Image.new("RGB", (W, H), BG)
+    d0 = ImageDraw.Draw(base)
+    d0.rounded_rectangle([110, 120, W - 110, H - 120], 14,
+                         fill=(10, 12, 15), outline=RULE, width=1)
+    d0.rounded_rectangle([110, 120, W - 110, 176], 14, fill=(28, 32, 38))
+    d0.rectangle([110, 160, W - 110, 176], fill=(28, 32, 38))
+    for i, c in enumerate([(255, 95, 86), (255, 189, 46), (39, 201, 63)]):
+        d0.ellipse([144 + i * 26, 141, 156 + i * 26, 153], fill=c)
+    d0.text((W // 2 - d0.textlength(title, font=UI(21)) // 2, 138),
+            title, font=UI(21), fill=INK3)
+    d0.rectangle([0, H - 5, W, H], fill=ACCENT)
+
+    fm = MONO(25)
+    x0, y0, lh = 152, 214, 38
+    n = 0
+    done: list[tuple[str, str]] = []
+
+    def paint(partial: str | None = None, kind: str = "cmd", cursor=True):
+        nonlocal n
+        img = base.copy()
+        d = ImageDraw.Draw(img)
+        y = y0
+        for k, t in done:
+            _line(d, x0, y, k, t, fm)
+            y += lh
+        if partial is not None:
+            w = _line(d, x0, y, kind, partial, fm)
+            if cursor:
+                d.rectangle([x0 + w + 4, y + 3, x0 + w + 15, y + 30],
+                            fill=(200, 210, 220))
+        img.save(frames / f"{n:05d}.png")
+        n += 1
+
+    for kind, text in lines:
+        if kind == "cmd":
+            for i in range(len(text) + 1):
+                paint(text[:i], kind)
+                if text[i - 1:i] == " ":
+                    paint(text[:i], kind)          # tiny pause at spaces
+            for _ in range(int(0.45 * FPS)):
+                paint(text, kind)
+        else:
+            for _ in range(max(2, int(0.30 * FPS))):
+                paint(text, kind, cursor=False)
+        done.append((kind, text))
+
+    for _ in range(int(hold * FPS)):
+        paint(None)
+
+    run(["ffmpeg", "-v", "error", "-framerate", str(FPS),
+         "-i", str(frames / "%05d.png"),
+         "-c:v", "libx264", "-preset", "slow", "-crf", "17",
+         "-tune", "stillimage", "-pix_fmt", "yuv420p", "-r", str(FPS),
+         "-y", str(out)])
+    shutil.rmtree(frames, ignore_errors=True)
+    return out
+
+
+def _line(d, x, y, kind, text, fm) -> float:
+    if kind == "cmd":
+        d.text((x, y), ">", font=fm, fill=ACCENT)
+        d.text((x + 26, y), text, font=fm, fill=INK)
+        return 26 + d.textlength(text, font=fm)
+    col = {"ok": BUY, "note": INK3, "warn": WARN}.get(kind, INK2)
+    d.text((x + 26, y), text, font=fm, fill=col)
+    return 26 + d.textlength(text, font=fm)
+
+
+def still_clip(out: Path, png: Path, seconds: float) -> Path:
+    run(["ffmpeg", "-v", "error", "-loop", "1", "-framerate", str(FPS),
+         "-t", f"{seconds}", "-i", str(png),
+         "-c:v", "libx264", "-preset", "slow", "-crf", "17",
+         "-tune", "stillimage", "-pix_fmt", "yuv420p", "-r", str(FPS),
+         "-y", str(out)])
+    return out
+
+
+# ==========================================================================
+# Screencast processing
+# ==========================================================================
+def screencast(out: Path, src: Path, captions: list[dict],
+               trim_from: float = 0.0,
+               speed: tuple[float, float, float] | None = None) -> Path:
+    """Normalise a webm clip to mp4, trim its lead-in, optionally accelerate a
+    stretch, and burn on captions.
+
+    ``trim_from`` and ``speed`` are in ORIGINAL clip time (the cue points the
+    recorder emitted). Caption ``t`` values are too — this function maps them
+    through the trim and the speed change, so a caption stays glued to the
+    moment it describes instead of drifting.
+    """
+    def to_out(t: float) -> float:
+        t -= trim_from
+        if speed is None:
+            return max(0.0, t)
+        s0, e0, f = speed[0] - trim_from, speed[1] - trim_from, speed[2]
+        if t <= s0:
+            return max(0.0, t)
+        if t <= e0:
+            return s0 + (t - s0) / f
+        return s0 + (e0 - s0) / f + (t - e0)
+
+    stage = WORK / (out.stem + "_a.mp4")
+    args = ["ffmpeg", "-v", "error"]
+    if trim_from > 0:
+        args += ["-ss", f"{trim_from}"]
+    args += ["-i", str(src)]
+
+    if speed:
+        s0, e0, f = speed[0] - trim_from, speed[1] - trim_from, speed[2]
+        vf = (f"[0:v]trim=0:{s0},setpts=PTS-STARTPTS[a];"
+              f"[0:v]trim={s0}:{e0},setpts=(PTS-STARTPTS)/{f}[b];"
+              f"[0:v]trim={e0},setpts=PTS-STARTPTS[c];"
+              f"[a][b][c]concat=n=3:v=1:a=0[v]")
+        args += ["-filter_complex", vf, "-map", "[v]"]
+
+    args += ["-c:v", "libx264", "-preset", "slow", "-crf", "18",
+             "-tune", "animation", "-pix_fmt", "yuv420p",
+             "-r", str(FPS), "-y", str(stage)]
+    run(args)
+
+    dur = probe_duration(stage)
+    if not captions:
+        shutil.move(str(stage), str(out))
+        return out
+
+    inputs, filt, prev, shown = ["-i", str(stage)], [], "0:v", 0
+    for i, c in enumerate(captions):
+        t0 = to_out(c["t"])
+        t1 = min(t0 + c.get("dur", 5.0), dur - 0.15)
+        if t1 - t0 < 1.0:
+            # Never let a caption fall off the end of its own clip.
+            print(f"    ! caption dropped (past end of {out.stem}): "
+                  f"{c['text'][:48]}")
+            continue
+        png = WORK / f"{out.stem}_cap{i}.png"
+        caption_strip(png, c["text"], c.get("sub", ""), c.get("accent", ACCENT))
+        inputs += ["-i", str(png)]
+        lbl = f"v{i}"
+        filt.append(
+            f"[{prev}][{len(inputs)//2 - 1}:v]overlay=x=0:y=H-h-46:"
+            f"enable='between(t,{t0:.2f},{t1:.2f})'[{lbl}]")
+        prev = lbl
+        shown += 1
+
+    if not filt:
+        shutil.move(str(stage), str(out))
+        return out
+
+    run(["ffmpeg", "-v", "error"] + inputs +
+        ["-filter_complex", ";".join(filt), "-map", f"[{prev}]",
+         "-c:v", "libx264", "-preset", "slow", "-crf", "18",
+         "-tune", "animation", "-pix_fmt", "yuv420p", "-r", str(FPS),
+         "-y", str(out)])
+    stage.unlink(missing_ok=True)
+    return out
+
+
+def concat_xfade(segments: list[Path], out: Path, fade: float = 0.4) -> None:
+    """Crossfade segments together. The concat demuxer would be cheaper but
+    cuts hard, and hard cuts between a card and a screencast look like a
+    glitch rather than an edit."""
+    durs = [probe_duration(p) for p in segments]
+    inputs = []
+    for p in segments:
+        inputs += ["-i", str(p)]
+
+    filt, prev, offset = [], "0:v", durs[0] - fade
+    for i in range(1, len(segments)):
+        lbl = f"x{i}"
+        filt.append(f"[{prev}][{i}:v]xfade=transition=fade:"
+                    f"duration={fade}:offset={offset:.3f}[{lbl}]")
+        prev = lbl
+        offset += durs[i] - fade
+
+    run(["ffmpeg", "-v", "error"] + inputs +
+        ["-filter_complex", ";".join(filt), "-map", f"[{prev}]",
+         "-c:v", "libx264", "-preset", "slow", "-crf", "18",
+         "-pix_fmt", "yuv420p", "-r", str(FPS), "-movflags", "+faststart",
+         "-y", str(out)])
+
+
+# ==========================================================================
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--clips", default=str(CLIPS))
+    ap.add_argument("--out", default=str(OUT))
+    a = ap.parse_args()
+
+    clips = Path(a.clips)
+    for f in ("01-setup", "02-strategy", "03-scan", "04-orders"):
+        if not (clips / f"{f}.webm").exists():
+            sys.exit(f"missing {f}.webm — run tools/record_app.py first")
+
+    cues = json.loads((clips / "cues.json").read_text(encoding="utf-8")) \
+        if (clips / "cues.json").exists() else {}
+
+    def C(clip: str, name: str, default: float) -> float:
+        return float(cues.get(clip, {}).get(name, default))
+
+    WORK.mkdir(parents=True, exist_ok=True)
+    seg: list[Path] = []
+
+    def add(p: Path) -> None:
+        seg.append(p)
+        print(f"  {len(seg):02d}. {p.name:26s} {probe_duration(p):5.1f}s")
+
+    print("building segments")
+
+    # ---- 1. title ---------------------------------------------------------
+    card(WORK / "c1.png",
+         eyebrow="A trading scanner you can actually run",
+         title="varsity-algo",
+         body="Describe a strategy in plain English. Scan the Nifty universe. "
+              "Review every order before it is placed.",
+         mono=["github.com/sachincse/varsity-algo"])
+    add(still_clip(WORK / "s01.mp4", WORK / "c1.png", 5.0))
+
+    # ---- 2. what you need -------------------------------------------------
+    card(WORK / "c2.png", eyebrow="Step 1  ·  What you need",
+         title="Two free installs",
+         bullets=["Python 3.11 or newer  —  python.org/downloads",
+                  "Node.js 20.19+ or 22.12+  —  nodejs.org",
+                  "A Zerodha account is OPTIONAL. The scanner runs "
+                  "on free end-of-day data."],
+         mono=["# on the Python installer, tick this box:",
+               "  [x] Add python.exe to PATH"], accent=BUY)
+    add(still_clip(WORK / "s02.mp4", WORK / "c2.png", 8.5))
+
+    # ---- 3. install terminal ---------------------------------------------
+    add(terminal_clip(WORK / "s03.mp4", "Command Prompt", [
+        ("note", "# get the code"),
+        ("cmd", "git clone https://github.com/sachincse/varsity-algo"),
+        ("out", "Cloning into 'varsity-algo'..."),
+        ("cmd", "cd varsity-algo"),
+        ("note", ""),
+        ("note", "# then just double-click start.bat"),
+        ("cmd", "start.bat"),
+        ("ok", "[ok] Python 3.11.9"),
+        ("ok", "[ok] virtual environment"),
+        ("ok", "[ok] Python packages"),
+        ("ok", "[ok] dashboard"),
+        ("out", ""),
+        ("out", "Starting. Your browser will open in a moment."),
+    ], hold=2.6))
+
+    # ---- 4. the dashboard -------------------------------------------------
+    add(screencast(WORK / "s04.mp4", clips / "01-setup.webm", [
+        {"t": C("01-setup", "tour", 4.2), "dur": 4.2,
+         "text": "The dashboard opens at localhost:8000",
+         "sub": "No API key needed to get this far."},
+        {"t": C("01-setup", "providers", 6.1), "dur": 3.6,
+         "text": "Every language model option, and whether it is ready",
+         "sub": "Green means you can use it right now."},
+    ], trim_from=max(0.0, C("01-setup", "ready", 2.8) - 0.6)))
+
+    # ---- 5. free LLM ------------------------------------------------------
+    card(WORK / "c5.png", eyebrow="Step 2  ·  Optional",
+         title="Add a free language model",
+         body="This is only used to turn your English into a strategy. "
+              "Pick one — all three are free and need no credit card.",
+         bullets=["Groq  —  console.groq.com/keys",
+                  "Google Gemini  —  aistudio.google.com/apikey",
+                  "OpenRouter  —  openrouter.ai/keys"],
+         mono=["# paste into the .env file, then restart",
+               "LLM_PROVIDER=groq",
+               "GROQ_API_KEY=gsk_your_key_here"], accent=BUY)
+    add(still_clip(WORK / "s05.mp4", WORK / "c5.png", 10.0))
+
+    card(WORK / "c5b.png", eyebrow="Or run it entirely offline",
+         title="No key. No cost. No data leaves your laptop.",
+         body="Ollama runs an open-weight model on your own machine. "
+              "This tutorial was recorded using exactly this.",
+         mono=["# install from ollama.com/download, then:",
+               "ollama pull qwen3:8b",
+               "",
+               "# .env",
+               "LLM_PROVIDER=ollama",
+               "LLM_MODEL=qwen3:8b"], accent=WARN)
+    add(still_clip(WORK / "s05b.mp4", WORK / "c5b.png", 9.5))
+
+    # ---- 6. describe in English ------------------------------------------
+    t_type = C("02-strategy", "typing", 4.0)
+    t_think = C("02-strategy", "thinking", 11.9)
+    t_ans = C("02-strategy", "answered", 39.4)
+    add(screencast(WORK / "s06.mp4", clips / "02-strategy.webm", [
+        {"t": t_type + 0.6, "dur": 5.2,
+         "text": "Type the rule the way you would say it out loud",
+         "sub": "No syntax to learn."},
+        {"t": t_think + 0.4, "dur": 4.2,
+         "text": "A 7-billion-parameter model, running locally on this laptop",
+         "sub": "Sped up here \u2014 it really took about 28 seconds.",
+         "accent": WARN},
+        {"t": t_ans + 1.2, "dur": 6.0,
+         "text": "It never writes code \u2014 it fills a fixed schema",
+         "sub": "Anything that fails validation is rejected before it runs.",
+         "accent": BUY},
+    ], trim_from=max(0.0, t_type - 1.6),
+       speed=(t_think + 1.2, t_ans - 0.6, 7.0)))
+
+    # ---- 7. scan ----------------------------------------------------------
+    t_run = C("03-scan", "run", 9.3)
+    t_res = C("03-scan", "results", 27.6)
+    t_warn = C("03-scan", "shortwarning", 34.6)
+    add(screencast(WORK / "s07.mp4", clips / "03-scan.webm", [
+        {"t": t_run + 1.4, "dur": 4.6,
+         "text": "The first scan downloads every symbol in the universe",
+         "sub": "A few minutes once, then cached and near-instant."},
+        {"t": t_res + 0.5, "dur": 4.6,
+         "text": "Ranked by how recently each signal fired",
+         "sub": "Green ENTRY, red EXIT."},
+        {"t": t_warn - 0.4, "dur": 5.2,
+         "text": "An EXIT means sell something you own \u2014 never a short",
+         "sub": "Retail cannot hold a short equity position overnight in India.",
+         "accent": SELL},
+    ], trim_from=max(0.0, t_run - 1.8),
+       speed=(t_run + 6.0, max(t_run + 7.0, t_res - 1.5), 5.0)))
+
+    # ---- 8. orders --------------------------------------------------------
+    t_sheet = C("04-orders", "sheet", 14.7)
+    t_ord = C("04-orders", "orders", 20.6)
+    t_guard = C("04-orders", "guardrail", 22.4)
+    add(screencast(WORK / "s08.mp4", clips / "04-orders.webm", [
+        {"t": t_sheet + 0.8, "dur": 4.4,
+         "text": "Signals become a sized order sheet",
+         "sub": "Equal weight across your open slots."},
+        {"t": t_ord + 0.6, "dur": 4.6,
+         "text": "Order placement is OFF until you turn it on in .env",
+         "sub": "Preview always works. Nothing is ever sent by surprise.",
+         "accent": BUY},
+        {"t": t_guard + 1.4, "dur": 5.0,
+         "text": "One order at a time. There is no 'place all'.",
+         "sub": "Each needs a fresh preview token and a typed confirmation.",
+         "accent": WARN},
+    ], trim_from=max(0.0, t_sheet - 2.2)))
+
+    # ---- 9. the honest part ----------------------------------------------
+    card(WORK / "c9.png", eyebrow="Before you trade any of this",
+         title="The strategy does not beat the index",
+         body="SMA 6/30 on the Nifty 100, tested 2011–2026 with next-open "
+              "fills, real Zerodha charges and a point-in-time universe:",
+         mono=["  the rule, honestly tested      1.92%  a year",
+               "  Nifty 100 index fund          10.70%  a year",
+               "  same stocks, no timing rule   11.90%  a year"],
+         accent=SELL)
+    add(still_clip(WORK / "s09.mp4", WORK / "c9.png", 11.0))
+
+    card(WORK / "c10.png", eyebrow="So what is it for",
+         title="A lens, not a system",
+         body="The scanner is genuinely useful for seeing what is moving. "
+              "The machinery around it — cost modelling, leak-free testing, "
+              "order guardrails — is the part worth keeping.",
+         bullets=["44 tests, including a future-scramble causality proof",
+                  "Full backtest and evidence in the README"])
+    add(still_clip(WORK / "s10.mp4", WORK / "c10.png", 9.5))
+
+    # ---- 10. end ----------------------------------------------------------
+    card(WORK / "c11.png", eyebrow="MIT licensed  ·  free forever",
+         title="Get it",
+         big="↓",
+         mono=["github.com/sachincse/varsity-algo",
+               "",
+               "# setup guide, every error message, and the fix",
+               "docs/SETUP.md"])
+    add(still_clip(WORK / "s11.mp4", WORK / "c11.png", 7.0))
+
+    print("\nstitching with crossfades")
+    out = Path(a.out)
+    concat_xfade(seg, out)
+    dur = probe_duration(out)
+    print(f"\n  {out}")
+    print(f"  {dur // 60:.0f}m {dur % 60:04.1f}s   "
+          f"{out.stat().st_size / 1e6:.1f} MB   {W}x{H} @ {FPS}fps")
+
+
+if __name__ == "__main__":
+    main()

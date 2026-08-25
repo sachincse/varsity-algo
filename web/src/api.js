@@ -56,6 +56,22 @@ export const api = {
     post('/api/llm/strategy', { text, provider, model }),
 
   scan: (spec, opts = {}) => post('/api/scan', { spec, ...opts }),
+  scanStart: (spec, opts = {}) => post('/api/scan/start', { spec, ...opts }),
+  scanStatus: (id) => request(`/api/scan/status/${id}`),
+
+  // Kick off a scan and poll until it finishes, reporting progress as it goes.
+  // A cold first run downloads hundreds of symbols; a spinner with no numbers
+  // is indistinguishable from a hang.
+  async scanWithProgress(spec, opts = {}, onProgress = () => {}) {
+    const { job_id } = await this.scanStart(spec, opts)
+    for (;;) {
+      await new Promise(r => setTimeout(r, 700))
+      const s = await this.scanStatus(job_id)
+      onProgress(s)
+      if (s.state === 'done') return s.result
+      if (s.state === 'error') throw new Error(s.error)
+    }
+  },
 
   tradeStatus: () => request('/api/trade/status'),
   preview: (payload) => post('/api/trade/preview', payload),
