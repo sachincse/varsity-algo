@@ -104,17 +104,7 @@ class OpenAICompatProvider:
         return self._local_server_up()
 
     def _local_server_up(self) -> bool:
-        import socket
-        from urllib.parse import urlparse
-
-        u = urlparse(self.base_url)
-        host = u.hostname or "127.0.0.1"
-        port = u.port or (443 if u.scheme == "https" else 80)
-        try:
-            with socket.create_connection((host, port), timeout=0.4):
-                return True
-        except OSError:
-            return False
+        return _probe(self.base_url)
 
     def generate(self, system: str, messages: list[dict], schema: dict):
         import openai
@@ -180,6 +170,37 @@ class OpenAICompatProvider:
 
 
 # --------------------------------------------------------------------------
+# Probing a local endpoint means a TCP connect, and a closed port on Windows
+# can sit on the timeout rather than refusing immediately. /api/config asks
+# about every provider, so an uncached probe made a page-load call take over a
+# second. Cache the answer briefly — a local server does not start and stop
+# between two clicks.
+_PROBE_TTL = 15.0
+_probe_cache: dict[str, tuple[float, bool]] = {}
+
+
+def _probe(base_url: str, timeout: float = 0.15) -> bool:
+    import socket
+    import time
+    from urllib.parse import urlparse
+
+    now = time.time()
+    hit = _probe_cache.get(base_url)
+    if hit and now - hit[0] < _PROBE_TTL:
+        return hit[1]
+
+    u = urlparse(base_url)
+    host = u.hostname or "127.0.0.1"
+    port = u.port or (443 if u.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            up = True
+    except OSError:
+        up = False
+    _probe_cache[base_url] = (now, up)
+    return up
+
+
 def _strictify(schema: dict) -> dict:
     """Make a pydantic JSON Schema acceptable to strict structured-output modes.
 

@@ -46,6 +46,16 @@ async def lifespan(app: FastAPI):
     log.info("  Kite API key   %s",
              "set" if SESSION.api_key else "NOT SET (see docs/SETUP.md)")
     log.info("  price source   %s", os.getenv("PRICE_SOURCE", "yfinance"))
+
+    # The provider SDKs are imported lazily so a missing one is not fatal, but
+    # that pushes a multi-second import onto whichever request touches it
+    # first — which is the page-load config call. Pay it here instead.
+    for mod in ("openai", "anthropic"):
+        try:
+            __import__(mod)
+        except ImportError:
+            log.debug("%s not installed", mod)
+
     yield
     log.info("varsity-algo stopped")
 
