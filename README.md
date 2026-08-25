@@ -12,8 +12,13 @@ This is the system from Zerodha Varsity's
 [*Build a Trading Algo with AI — No Coding Required*](https://www.youtube.com/watch?v=V9Ra8klDzrM),
 built end to end and built safely.
 
-**No API keys needed to scan.** Zerodha is optional. The language model is
-optional, and can run entirely on your own laptop for free.
+It follows the video's flow — log in with your **API key, API secret and
+request token**, see your account, then generate signals with **Short SMA,
+Long SMA, Lookback and Max** — and adds the parts the video leaves out.
+
+**Connect Zerodha and prices come from Kite, exactly as in the video.** Without
+it the scanner still runs on free end-of-day data, so you can try everything
+before paying for anything.
 
 ---
 
@@ -62,9 +67,10 @@ Full walkthrough, including every error message and its fix:
 
 | | |
 |---|---|
-| ![Setup](docs/img/setup.png) | **Setup** — every language-model option and whether it is ready. Green means usable right now. Connect Zerodha here if you want holdings and live prices. |
+| ![Connect](docs/img/connect.png) | **Connect** — the video's login page: API key, API secret, request token. Credentials typed here stay in memory; put them in `.env` and only the token is needed each morning. |
+| ![Account](docs/img/setup.png) | **Account** — the video's user tab. Straight from the Kite profile API: user ID, name, products, exchanges — plus holdings and available funds. |
 | ![Strategy](docs/img/strategy.png) | **Strategy** — type the rule the way you would say it. The model fills a fixed schema; it never writes or runs code. |
-| ![Signals](docs/img/signals.png) | **Signals** — the ranked crossover table, with a progress bar on the first (slow) scan and an honest count of anything not shown. |
+| ![Signals](docs/img/signals.png) | **Signals** — Short SMA, Long SMA, Lookback and Max, then a table ranked by crossover recency showing the close beside both moving averages, so you can check a signal by eye. |
 | ![Orders](docs/img/orders.png) | **Orders** — signals become a sized order sheet. Placement is off by default and every order needs its own confirmation. |
 
 ---
@@ -116,8 +122,10 @@ schema ([`core/nl.py`](core/nl.py)) which compiles into a validated strategy
 ([`core/spec.py`](core/spec.py)). Asking it to add a `shell_command` field
 returns `Extra inputs are not permitted`.
 
-**₹500/month before you can look at anything.** The scanner runs on free
-end-of-day data. Kite Connect is optional.
+**₹500/month before you can look at anything.** Kite is used the moment you
+connect — same data, same broker, same chart. But you are not blocked until
+then: without a session the scanner falls back to free end-of-day data, so you
+can decide whether it is worth paying for.
 
 **Nothing checks the signals are honest.** 44 tests, and the important ones try
 to prove the engine cannot see the future: truncate the input and signals must

@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -49,12 +50,20 @@ async def lifespan(app: FastAPI):
 
     # The provider SDKs are imported lazily so a missing one is not fatal, but
     # that pushes a multi-second import onto whichever request touches it
-    # first — which is the page-load config call. Pay it here instead.
-    for mod in ("openai", "anthropic"):
-        try:
-            __import__(mod)
-        except ImportError:
-            log.debug("%s not installed", mod)
+    # first — which is the page-load config call. Warm them here instead.
+    #
+    # On a BACKGROUND THREAD: uvicorn does not accept connections until the
+    # lifespan startup returns, so doing this inline added ~8s before the app
+    # would answer at all. Boot time is what the user actually waits on after
+    # double-clicking start.bat; the import finishes long before they click.
+    def _warm() -> None:
+        for mod in ("openai", "anthropic"):
+            try:
+                __import__(mod)
+            except ImportError:
+                log.debug("%s not installed", mod)
+
+    threading.Thread(target=_warm, daemon=True, name="warm-sdks").start()
 
     yield
     log.info("varsity-algo stopped")

@@ -11,7 +11,12 @@ router = APIRouter()
 
 
 class LoginBody(BaseModel):
-    request_token: str = Field(min_length=1, max_length=200)
+    request_token: str = Field(min_length=1, max_length=300)
+    # Optional: the video types these into the login page rather than a file.
+    # Supplied here they are held in memory for this process only, never
+    # written to disk. .env remains the recommended route.
+    api_key: str = Field(default="", max_length=120)
+    api_secret: str = Field(default="", max_length=120)
 
 
 @router.get("/status")
@@ -20,9 +25,11 @@ def status() -> dict:
 
 
 @router.get("/login-url")
-def login_url() -> dict:
+def login_url(api_key: str = "") -> dict:
+    """The Kite login URL. ``api_key`` lets the UI build it before anything is
+    saved, so the form works on a machine with no .env at all."""
     try:
-        return {"url": SESSION.login_url()}
+        return {"url": SESSION.login_url(api_key)}
     except KiteNotConfigured as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -46,7 +53,7 @@ def login(body: LoginBody) -> dict:
             token = got
 
     try:
-        sess = SESSION.authenticate(token)
+        sess = SESSION.authenticate(token, body.api_key, body.api_secret)
     except KiteNotConfigured as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:

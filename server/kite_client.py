@@ -94,25 +94,42 @@ class KiteSession:
         self._lock = threading.Lock()
         self._kite = None
         self._session: Session | None = None
+        # Credentials typed into the login form live here for the life of the
+        # process only. They are never written to disk — .env is the place for
+        # that, and it is the recommended route. This exists so someone can try
+        # the app exactly as the video does, without editing a file first.
+        self._runtime_key = ""
+        self._runtime_secret = ""
 
     # -- configuration ----------------------------------------------------
     @property
     def api_key(self) -> str:
-        return os.getenv("KITE_API_KEY", "").strip()
+        return self._runtime_key or os.getenv("KITE_API_KEY", "").strip()
 
     @property
     def api_secret(self) -> str:
-        return os.getenv("KITE_API_SECRET", "").strip()
+        return self._runtime_secret or os.getenv("KITE_API_SECRET", "").strip()
+
+    @property
+    def from_env(self) -> bool:
+        """True when credentials came from .env rather than the login form."""
+        return bool(os.getenv("KITE_API_KEY", "").strip()
+                    and os.getenv("KITE_API_SECRET", "").strip())
+
+    def set_credentials(self, api_key: str, api_secret: str) -> None:
+        self._runtime_key = (api_key or "").strip()
+        self._runtime_secret = (api_secret or "").strip()
 
     def is_configured(self) -> bool:
         return bool(self.api_key and self.api_secret)
 
-    def login_url(self) -> str:
-        if not self.api_key:
+    def login_url(self, api_key: str | None = None) -> str:
+        api_key = (api_key or "").strip() or self.api_key
+        if not api_key:
             raise KiteNotConfigured(
                 "KITE_API_KEY is not set. Add it to your .env file — see "
                 "docs/SETUP.md step 4.")
-        return LOGIN_URL.format(api_key=self.api_key)
+        return LOGIN_URL.format(api_key=api_key)
 
     # -- session ----------------------------------------------------------
     def is_live(self) -> bool:
@@ -134,6 +151,7 @@ class KiteSession:
             "api_key_present": bool(self.api_key),
             "api_secret_present": bool(self.api_secret),
             "login_url": self.login_url() if configured else None,
+            "credentials_from_env": self.from_env,
             "profile": self._session.to_public() if (live and self._session) else None,
         }
         if configured and not live:
@@ -141,8 +159,16 @@ class KiteSession:
                                 "request_token from the redirected address bar.")
         return out
 
-    def authenticate(self, request_token: str) -> Session:
-        """Exchange a request_token for an access_token."""
+    def authenticate(self, request_token: str, api_key: str = "",
+                     api_secret: str = "") -> Session:
+        """Exchange a request_token for an access_token.
+
+        ``api_key``/``api_secret`` may be supplied by the login form, matching
+        the flow in the video. If omitted, .env is used.
+        """
+        if api_key or api_secret:
+            self.set_credentials(api_key or self.api_key,
+                                 api_secret or self.api_secret)
         if not self.is_configured():
             raise KiteNotConfigured(
                 "KITE_API_KEY and KITE_API_SECRET must both be set in .env.")
@@ -221,6 +247,8 @@ class KiteSession:
             kite = self._kite
             self._kite = None
             self._session = None
+            self._runtime_key = ""
+            self._runtime_secret = ""
         if kite is not None:
             try:
                 kite.invalidate_access_token()

@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
+import Connect from './components/Connect'
+import Profile from './components/Profile'
 import Setup from './components/Setup'
 import Strategy from './components/Strategy'
 import Signals from './components/Signals'
 import Orders from './components/Orders'
 
+// Connect / Account mirror the login page and "user tab" from the video.
 const TABS = [
-  ['setup', 'Setup'],
+  ['connect', 'Connect'],
+  ['account', 'Account'],
   ['strategy', 'Strategy'],
   ['signals', 'Signals'],
   ['orders', 'Orders'],
+  ['setup', 'Settings'],
 ]
 
 export default function App() {
-  const [tab, setTab] = useState('setup')
+  const [tab, setTab] = useState('connect')
   const [config, setConfig] = useState(null)
   const [spec, setSpec] = useState(null)
   const [specSummary, setSpecSummary] = useState('')
@@ -75,6 +80,12 @@ export default function App() {
         <div className="msg err"><strong>Backend unreachable.</strong> {bootError}</div>
       )}
 
+      {tab === 'connect' && (
+        <Connect config={config} onChange={refreshConfig} />
+      )}
+      {tab === 'account' && (
+        <Profile config={config} />
+      )}
       {tab === 'setup' && (
         <Setup config={config} onChange={refreshConfig} />
       )}
@@ -93,6 +104,7 @@ export default function App() {
           summary={specSummary}
           scan={scan}
           onScan={setScan}
+          onSpec={(sp, sum) => { setSpec(sp); setSpecSummary(sum) }}
           goToOrders={() => setTab('orders')}
         />
       )}

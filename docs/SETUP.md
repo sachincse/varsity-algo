@@ -136,29 +136,42 @@ longer a separate add-on for it.
 You also need **2FA/TOTP enabled** on your Zerodha account. The login flow is
 interactive by design; there is no password-only path.
 
-**4b. Put the credentials in `.env`.** Copy `.env.example` to `.env` and fill in:
+**4b. Log in — two ways.**
+
+*The way the video does it:* open the **Connect** tab, type your API key and
+API secret straight into the form, click the login link that appears, sign in
+at Zerodha, then paste the redirected address back into the request-token box.
+Credentials typed here live in the server's memory only and are never written
+to disk — so you retype them after a restart.
+
+*The way that saves typing:* put them in `.env` instead —
 
 ```
 KITE_API_KEY=your_api_key_here
 KITE_API_SECRET=your_api_secret_here
 ```
 
-Restart the backend so it picks them up.
+— restart the backend, and the Connect tab only asks for the request token.
 
-**4c. Log in.** On the **Setup** tab, click the Kite login link, sign in, and
-you will land on a URL like:
+Either way you will land on a URL like:
 
 ```
 http://127.0.0.1:8000/kite-redirect?request_token=AbCdEf123&action=login&status=success
 ```
 
-The page will show an error — that is expected and harmless, nothing is
-listening there. Copy the whole URL from the address bar and paste it into the
-box. The token gets extracted for you.
+The page will show an error. That is expected and harmless — nothing is
+listening there, and the token you need is in the address bar. Paste the whole
+URL; the token is extracted for you.
 
 > **The `request_token` is single-use and dies after a couple of minutes.** If
 > you get "Kite rejected the login", the overwhelmingly likely cause is a stale
-> token, not a wrong secret. Just click the login link again for a fresh one.
+> token, not a wrong secret. Click the login link again for a fresh one.
+
+**4c. Once connected**, the **Account** tab shows your user ID, name, products
+and exchanges straight from the Kite profile API, along with your holdings and
+available funds. Prices switch to Kite automatically, so the numbers match the
+chart in your own Kite terminal — which is what the video does. Set
+`PRICE_SOURCE=yfinance` in `.env` if you would rather keep using the free feed.
 
 Your session lasts until **6 AM IST**, then you log in again. That is a
 regulatory rule, not a limitation of this app.

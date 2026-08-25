@@ -125,7 +125,13 @@ def _resolve(body: "ScanBody") -> tuple[StrategySpec, str]:
     except ValidationError as e:
         raise HTTPException(status_code=422,
                             detail=f"invalid strategy spec: {e}") from e
-    source = (body.source or os.getenv("PRICE_SOURCE", "yfinance")).lower()
+    # The video pulls candles from Kite. Once a session is live we do the same,
+    # so prices match the broker's own chart. Without a session we fall back to
+    # the free feed rather than refusing to run.
+    default = os.getenv("PRICE_SOURCE", "").strip().lower()
+    if not default:
+        default = "kite" if SESSION.is_live() else "yfinance"
+    source = (body.source or default).lower()
     return spec, source
 
 

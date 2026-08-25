@@ -45,7 +45,8 @@ export const api = {
 
   kiteStatus: () => request('/api/kite/status'),
   kiteLoginUrl: () => request('/api/kite/login-url'),
-  kiteLogin: (request_token) => post('/api/kite/login', { request_token }),
+  kiteLogin: (request_token, api_key = '', api_secret = '') =>
+    post('/api/kite/login', { request_token, api_key, api_secret }),
   kiteLogout: () => post('/api/kite/logout'),
   holdings: () => request('/api/kite/holdings'),
   margins: () => request('/api/kite/margins'),

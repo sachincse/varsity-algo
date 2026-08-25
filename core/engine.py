@@ -161,6 +161,21 @@ def bars_since(flag: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out, index=flag.index, columns=flag.columns)
 
 
+def _rule_operands(node):
+    """The two sides of the entry rule, if it is a simple comparison.
+
+    The video's table shows the close alongside SMA(6) and SMA(30) — the actual
+    indicator values behind the signal, so you can eyeball whether it is real.
+    Reporting them generically means the same column works for an EMA cross, an
+    RSI threshold, or a breakout.
+    """
+    if isinstance(node, (Crossover, Comparison)):
+        return node.left, node.right
+    if isinstance(node, (And, Or)) and node.conditions:
+        return _rule_operands(node.conditions[0])
+    return None, None
+
+
 def _default_exit(spec: StrategySpec):
     """If no exit was given and the entry is a crossover, the exit is the
     opposite crossing. Anything else needs an explicit exit."""
@@ -191,6 +206,13 @@ def run_spec(spec: StrategySpec, panel: dict,
     last = close.index[-1]
 
     entry = evaluate_condition(spec.entry, panel)
+
+    # Indicator values for the table, so a signal can be checked by eye.
+    left_op, right_op = _rule_operands(spec.entry)
+    left_vals = evaluate_operand(left_op, panel) if left_op is not None else None
+    right_vals = evaluate_operand(right_op, panel) if right_op is not None else None
+    left_label = left_op.label if left_op is not None else ""
+    right_label = right_op.label if right_op is not None else ""
     exit_node = _default_exit(spec)
     exit_ = (evaluate_condition(exit_node, panel) if exit_node is not None
              else pd.DataFrame(False, index=close.index, columns=close.columns))
@@ -229,6 +251,12 @@ def run_spec(spec: StrategySpec, panel: dict,
             continue
 
         fired_on = close.index[close.index.get_loc(last) - since]
+        def at_last(frame):
+            if frame is None:
+                return None
+            v = frame[sym].loc[:last].dropna()
+            return round(float(v.iloc[-1]), 2) if len(v) else None
+
         rows.append({
             "symbol": sym,
             "side": side,
@@ -236,6 +264,10 @@ def run_spec(spec: StrategySpec, panel: dict,
             "bars_since": since,
             "price": round(px, 2),
             "price_date": bar.date(),
+            "left_label": left_label,
+            "left_value": at_last(left_vals),
+            "right_label": right_label,
+            "right_value": at_last(right_vals),
             "median_turnover_cr": round(float(tv) / 1e7, 2),
         })
 
@@ -243,6 +275,8 @@ def run_spec(spec: StrategySpec, panel: dict,
     if df.empty:
         empty = pd.DataFrame(columns=["symbol", "side", "signal_date",
                                       "bars_since", "price", "price_date",
+                                      "left_label", "left_value",
+                                      "right_label", "right_value",
                                       "median_turnover_cr"])
         empty.attrs.update(total=0, total_entry=0, total_exit=0,
                            shown=0, dropped=0)
