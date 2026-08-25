@@ -15,7 +15,7 @@ kiteconnect>=5.2
 # LLM providers — anthropic uses its own SDK, everything else is
 # OpenAI-compatible and goes through the openai client
 anthropic>=0.40
-openai>=1.60
+openai>=3.3.1
 
 # tests
 pytest>=8.0
