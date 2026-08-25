@@ -18,4 +18,4 @@ anthropic>=0.40
 openai>=1.60
 
 # tests
-pytest>=8.0
+pytest>=9.1.1
