@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule: { interval: "monthly" }
     open-pull-requests-limit: 5
+    # requirements.txt pins FLOORS (">=2.2"), not exact versions. The default
+    # strategy raises those floors every release, which only narrows the range
+    # of environments the project installs on and fixes nothing. Only raise a
+    # floor when a new version is actually required.
+    versioning-strategy: increase-if-necessary
     groups:
       python-deps:
         patterns: ["*"]
