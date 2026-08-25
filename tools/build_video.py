@@ -25,6 +25,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import narration
+
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build"
 CLIPS = BUILD / "clips"
@@ -354,6 +357,53 @@ def screencast(out: Path, src: Path, captions: list[dict],
     return out
 
 
+def extend_to(clip: Path, target: float) -> Path:
+    """Hold the final frame until ``target`` seconds.
+
+    Used when the narration for a segment outlasts the footage. Freezing is
+    the right move rather than slowing the clip down: the last frame is the
+    compiled strategy, or the results table, or the order sheet — precisely
+    the thing the voice is talking about while it holds.
+    """
+    have = probe_duration(clip)
+    if target <= have + 0.05:
+        return clip
+    out = clip.with_name(clip.stem + "_ext.mp4")
+    run(["ffmpeg", "-v", "error", "-i", str(clip),
+         "-vf", f"tpad=stop_mode=clone:stop_duration={target - have:.2f}",
+         "-c:v", "libx264", "-preset", "slow", "-crf", "18",
+         "-pix_fmt", "yuv420p", "-r", str(FPS), "-y", str(out)])
+    clip.unlink(missing_ok=True)
+    return out
+
+
+def mux_narration(video: Path, out: Path, starts: dict[str, float],
+                  vo: dict[str, dict]) -> None:
+    """Lay each narration line onto the finished picture at its segment start.
+
+    The offsets must account for the crossfades — every join overlaps by
+    ``fade`` seconds, so segment starts are NOT a running sum of durations.
+    """
+    ins, filt, labels = ["-i", str(video)], [], []
+    for i, (seg, t) in enumerate(sorted(starts.items(), key=lambda kv: kv[1])):
+        if seg not in vo:
+            continue
+        ins += ["-i", str(vo[seg]["path"])]
+        lbl = f"a{i}"
+        filt.append(f"[{len(ins)//2 - 1}:a]adelay={int(t * 1000)}|{int(t * 1000)}[{lbl}]")
+        labels.append(f"[{lbl}]")
+
+    filt.append(f"{''.join(labels)}amix=inputs={len(labels)}:"
+                f"normalize=0:dropout_transition=0[mixed]")
+    filt.append("[mixed]alimiter=limit=0.95,aresample=48000[aout]")
+
+    run(["ffmpeg", "-v", "error"] + ins +
+        ["-filter_complex", ";".join(filt),
+         "-map", "0:v", "-map", "[aout]",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+         "-movflags", "+faststart", "-shortest", "-y", str(out)])
+
+
 def concat_xfade(segments: list[Path], out: Path, fade: float = 0.4) -> None:
     """Crossfade segments together. The concat demuxer would be cheaper but
     cuts hard, and hard cuts between a card and a screencast look like a
@@ -383,6 +433,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--clips", default=str(CLIPS))
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--revoice", action="store_true",
+                    help="re-synthesise the narration")
     a = ap.parse_args()
 
     clips = Path(a.clips)
@@ -397,11 +449,26 @@ def main() -> None:
         return float(cues.get(clip, {}).get(name, default))
 
     WORK.mkdir(parents=True, exist_ok=True)
-    seg: list[Path] = []
 
-    def add(p: Path) -> None:
+    # Narration first — it decides how long every segment has to be.
+    print("synthesising narration")
+    vo = narration.synth_all(BUILD / "vo", force=a.revoice)
+    def want(name: str, floor: float) -> float:
+        return max(floor, vo.get(name, {}).get("dur", 0.0))
+
+    seg: list[Path] = []
+    order: list[str] = []
+
+    def add_named(name: str, p: Path) -> None:
+        add(p, name)
+
+    def add(p: Path, name: str) -> None:
+        p = extend_to(p, want(name, 0.0))
         seg.append(p)
-        print(f"  {len(seg):02d}. {p.name:26s} {probe_duration(p):5.1f}s")
+        order.append(name)
+        n = vo.get(name, {}).get("dur", 0)
+        print(f"  {len(seg):02d}. {name:5s} {probe_duration(p):6.2f}s"
+              f"   voice {n:5.2f}s")
 
     print("building segments")
 
@@ -412,7 +479,7 @@ def main() -> None:
          body="Describe a strategy in plain English. Scan the Nifty universe. "
               "Review every order before it is placed.",
          mono=["github.com/sachincse/varsity-algo"])
-    add(still_clip(WORK / "s01.mp4", WORK / "c1.png", 5.0))
+    add_named("s01", still_clip(WORK / "s01.mp4", WORK / "c1.png", want("s01", 5.0)))
 
     # ---- 2. what you need -------------------------------------------------
     card(WORK / "c2.png", eyebrow="Step 1  ·  What you need",
@@ -423,10 +490,10 @@ def main() -> None:
                   "on free end-of-day data."],
          mono=["# on the Python installer, tick this box:",
                "  [x] Add python.exe to PATH"], accent=BUY)
-    add(still_clip(WORK / "s02.mp4", WORK / "c2.png", 8.5))
+    add_named("s02", still_clip(WORK / "s02.mp4", WORK / "c2.png", want("s02", 8.5)))
 
     # ---- 3. install terminal ---------------------------------------------
-    add(terminal_clip(WORK / "s03.mp4", "Command Prompt", [
+    add_named("s03", terminal_clip(WORK / "s03.mp4", "Command Prompt", [
         ("note", "# get the code"),
         ("cmd", "git clone https://github.com/sachincse/varsity-algo"),
         ("out", "Cloning into 'varsity-algo'..."),
@@ -443,7 +510,7 @@ def main() -> None:
     ], hold=2.6))
 
     # ---- 4. the dashboard -------------------------------------------------
-    add(screencast(WORK / "s04.mp4", clips / "01-setup.webm", [
+    add_named("s04", screencast(WORK / "s04.mp4", clips / "01-setup.webm", [
         {"t": C("01-setup", "tour", 4.2), "dur": 4.2,
          "text": "The dashboard opens at localhost:8000",
          "sub": "No API key needed to get this far."},
@@ -463,7 +530,7 @@ def main() -> None:
          mono=["# paste into the .env file, then restart",
                "LLM_PROVIDER=groq",
                "GROQ_API_KEY=gsk_your_key_here"], accent=BUY)
-    add(still_clip(WORK / "s05.mp4", WORK / "c5.png", 10.0))
+    add_named("s05", still_clip(WORK / "s05.mp4", WORK / "c5.png", want("s05", 10.0)))
 
     card(WORK / "c5b.png", eyebrow="Or run it entirely offline",
          title="No key. No cost. No data leaves your laptop.",
@@ -475,13 +542,13 @@ def main() -> None:
                "# .env",
                "LLM_PROVIDER=ollama",
                "LLM_MODEL=qwen3:8b"], accent=WARN)
-    add(still_clip(WORK / "s05b.mp4", WORK / "c5b.png", 9.5))
+    add_named("s05b", still_clip(WORK / "s05b.mp4", WORK / "c5b.png", want("s05b", 9.5)))
 
     # ---- 6. describe in English ------------------------------------------
     t_type = C("02-strategy", "typing", 4.0)
     t_think = C("02-strategy", "thinking", 11.9)
     t_ans = C("02-strategy", "answered", 39.4)
-    add(screencast(WORK / "s06.mp4", clips / "02-strategy.webm", [
+    add_named("s06", screencast(WORK / "s06.mp4", clips / "02-strategy.webm", [
         {"t": t_type + 0.6, "dur": 5.2,
          "text": "Type the rule the way you would say it out loud",
          "sub": "No syntax to learn."},
@@ -494,13 +561,13 @@ def main() -> None:
          "sub": "Anything that fails validation is rejected before it runs.",
          "accent": BUY},
     ], trim_from=max(0.0, t_type - 1.6),
-       speed=(t_think + 1.2, t_ans - 0.6, 7.0)))
+       speed=(t_think + 1.2, t_ans - 0.6, 3.2)))
 
     # ---- 7. scan ----------------------------------------------------------
     t_run = C("03-scan", "run", 9.3)
     t_res = C("03-scan", "results", 27.6)
     t_warn = C("03-scan", "shortwarning", 34.6)
-    add(screencast(WORK / "s07.mp4", clips / "03-scan.webm", [
+    add_named("s07", screencast(WORK / "s07.mp4", clips / "03-scan.webm", [
         {"t": t_run + 1.4, "dur": 4.6,
          "text": "The first scan downloads every symbol in the universe",
          "sub": "A few minutes once, then cached and near-instant."},
@@ -512,13 +579,13 @@ def main() -> None:
          "sub": "Retail cannot hold a short equity position overnight in India.",
          "accent": SELL},
     ], trim_from=max(0.0, t_run - 1.8),
-       speed=(t_run + 6.0, max(t_run + 7.0, t_res - 1.5), 5.0)))
+       speed=(t_run + 6.0, max(t_run + 7.0, t_res - 1.5), 3.0)))
 
     # ---- 8. orders --------------------------------------------------------
     t_sheet = C("04-orders", "sheet", 14.7)
     t_ord = C("04-orders", "orders", 20.6)
     t_guard = C("04-orders", "guardrail", 22.4)
-    add(screencast(WORK / "s08.mp4", clips / "04-orders.webm", [
+    add_named("s08", screencast(WORK / "s08.mp4", clips / "04-orders.webm", [
         {"t": t_sheet + 0.8, "dur": 4.4,
          "text": "Signals become a sized order sheet",
          "sub": "Equal weight across your open slots."},
@@ -541,7 +608,7 @@ def main() -> None:
                "  Nifty 100 index fund          10.70%  a year",
                "  same stocks, no timing rule   11.90%  a year"],
          accent=SELL)
-    add(still_clip(WORK / "s09.mp4", WORK / "c9.png", 11.0))
+    add_named("s09", still_clip(WORK / "s09.mp4", WORK / "c9.png", want("s09", 11.0)))
 
     card(WORK / "c10.png", eyebrow="So what is it for",
          title="A lens, not a system",
@@ -550,7 +617,7 @@ def main() -> None:
               "order guardrails — is the part worth keeping.",
          bullets=["44 tests, including a future-scramble causality proof",
                   "Full backtest and evidence in the README"])
-    add(still_clip(WORK / "s10.mp4", WORK / "c10.png", 9.5))
+    add_named("s10", still_clip(WORK / "s10.mp4", WORK / "c10.png", want("s10", 9.5)))
 
     # ---- 10. end ----------------------------------------------------------
     card(WORK / "c11.png", eyebrow="MIT licensed  ·  free forever",
@@ -560,15 +627,35 @@ def main() -> None:
                "",
                "# setup guide, every error message, and the fix",
                "docs/SETUP.md"])
-    add(still_clip(WORK / "s11.mp4", WORK / "c11.png", 7.0))
+    add_named("s11", still_clip(WORK / "s11.mp4", WORK / "c11.png", want("s11", 7.0)))
 
     print("\nstitching with crossfades")
+    silent = WORK / "_silent.mp4"
+    fade = 0.4
+    concat_xfade(seg, silent, fade=fade)
+
+    # Where each segment lands on the FINAL timeline. Crossfades overlap the
+    # joins, so this is a running sum minus one fade per join — not a plain
+    # cumulative total.
+    starts, t = {}, 0.0
+    for i, (p, name) in enumerate(zip(seg, order)):
+        starts[name] = t
+        t += probe_duration(p) - (fade if i < len(seg) - 1 else 0)
+
+    print("laying narration onto the timeline")
     out = Path(a.out)
-    concat_xfade(seg, out)
+    mux_narration(silent, out, starts, vo)
+    silent.unlink(missing_ok=True)
+
     dur = probe_duration(out)
+    has_audio = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=codec_name,channels", "-of", "csv=p=0", str(out)],
+        capture_output=True, text=True).stdout.strip()
     print(f"\n  {out}")
     print(f"  {dur // 60:.0f}m {dur % 60:04.1f}s   "
           f"{out.stat().st_size / 1e6:.1f} MB   {W}x{H} @ {FPS}fps")
+    print(f"  audio: {has_audio or 'MISSING'}   voice: {narration.VOICE}")
 
 
 if __name__ == "__main__":

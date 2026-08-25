@@ -17,12 +17,18 @@ optional, and can run entirely on your own laptop for free.
 
 ---
 
-## Watch the 2-minute setup tutorial
+## Watch the setup tutorial
 
-[![Tutorial](docs/img/video-poster.png)](docs/varsity-algo-tutorial.mp4)
+[![Tutorial](docs/img/video-poster.png)](https://github.com/sachincse/varsity-algo/releases/latest)
 
-**▶ [docs/varsity-algo-tutorial.mp4](docs/varsity-algo-tutorial.mp4)** — install,
-first scan, and the order guardrails. Every frame is the real application.
+**▶ [Download the tutorial (4 min, narrated)](https://github.com/sachincse/varsity-algo/releases/latest)**
+— or [docs/varsity-algo-tutorial.mp4](docs/varsity-algo-tutorial.mp4) in the repo.
+
+Install, first scan, building a strategy from English, and the order
+guardrails. Narrated end to end. Every frame is the real application — the
+strategy you see being built from *"golden cross on the nifty 500 but only if
+RSI is under 70"* was produced live by a 7B model running locally with no API
+key.
 
 ---
 
@@ -168,7 +174,8 @@ server/   FastAPI; serves /api and the built SPA from one process
           kite_client.py · jobs.py · llm/ (12 providers) · routes/
 web/      React + Vite dashboard
 tests/    44 tests, mostly attempts to break the causality guarantee
-tools/    record_app.py + build_video.py — the tutorial video is generated
+tools/    record_app.py · narration.py · build_video.py — the tutorial
+          video is generated from source, not hand-edited
 docs/     SETUP.md · API_SPEC.md · the tutorial video
 ```
 
@@ -183,9 +190,15 @@ python -m uvicorn server.main:app --reload --port 8000
 Rebuild the tutorial video (needs ffmpeg):
 
 ```bash
-python tools/record_app.py --out build/clips
-python tools/build_video.py
+python tools/record_app.py --out build/clips   # drive the real app
+python tools/build_video.py --revoice          # narrate, edit, encode
 ```
+
+The narration script lives in [`tools/narration.py`](tools/narration.py) and is
+spoken by a free neural voice via `edge-tts` — no API key. Narration *drives*
+the edit: each segment is stretched to fit its line rather than the line being
+squeezed into a duration chosen in advance. Change `VOICE` for a different
+accent.
 
 ## Licence
 
