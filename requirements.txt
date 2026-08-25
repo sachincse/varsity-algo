@@ -1,6 +1,6 @@
 # backend
 fastapi[standard]>=0.141.1
-python-dotenv>=1.0
+python-dotenv>=1.2.3
 
 # data + engine
 pandas>=2.2
