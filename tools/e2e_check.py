@@ -163,19 +163,33 @@ def scan_and_orders(use_kite: bool) -> None:
         o = prev["orders"][0]
         base = {k: o[k] for k in ("tradingsymbol", "exchange", "transaction_type",
                                   "quantity", "product", "order_type")}
+        # This file can only ever prove the OUTER gate. ENABLE_TRADING is
+        # checked before anything else, so against a live server with trading
+        # off, every malformed request comes back with the same "disabled"
+        # response — a tampered quantity, a wrong confirmation word and a
+        # perfectly valid order are indistinguishable here.
+        #
+        # This used to be three separate checks named "tampered order refused"
+        # and "wrong confirmation word refused". They passed, and they were
+        # worthless: the signature and confirmation guards were never reached,
+        # and deleting them outright would not have failed anything. The real
+        # coverage lives in tests/test_order_guards.py, which turns trading on
+        # with no broker attached so each guard fires for its own reason.
         st, r = api("/api/trade/place",
                     {**base, "confirm_token": o["confirm_token"], "confirm": "CONFIRM"})
-        check("placement REFUSED while trading is disabled", st == 403,
+        check("a valid order is REFUSED while trading is disabled", st == 403,
               str(r.get("detail", ""))[:70])
 
-        st, r = api("/api/trade/place",
-                    {**base, "quantity": base["quantity"] + 1,
-                     "confirm_token": o["confirm_token"], "confirm": "CONFIRM"})
-        check("tampered order refused", st in (400, 403))
-
-        st, r = api("/api/trade/place",
-                    {**base, "confirm_token": o["confirm_token"], "confirm": "yes"})
-        check("wrong confirmation word refused", st in (400, 403))
+        st, tampered = api("/api/trade/place",
+                           {**base, "quantity": base["quantity"] + 1,
+                            "confirm_token": o["confirm_token"], "confirm": "CONFIRM"})
+        st2, wrong = api("/api/trade/place",
+                         {**base, "confirm_token": o["confirm_token"], "confirm": "yes"})
+        check("the outer gate refuses everything, valid or not",
+              st == 403 and st2 == 403
+              and str(tampered.get("detail")) == str(r.get("detail"))
+              and str(wrong.get("detail")) == str(r.get("detail")),
+              "signature + confirmation guards covered by tests/test_order_guards.py")
 
 
 def ui_checks(use_kite: bool) -> None:
