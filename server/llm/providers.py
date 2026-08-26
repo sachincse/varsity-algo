@@ -103,6 +103,37 @@ class OpenAICompatProvider:
         # ready when nothing is listening on the port.
         return self._local_server_up()
 
+    def _installed(self) -> list[str]:
+        """Model ids this server currently holds, or [] if it will not say."""
+        try:
+            import httpx
+            r = httpx.get(f"{self.base_url.rstrip('/')}/models", timeout=3.0)
+            return sorted(m["id"] for m in r.json().get("data", []))
+        except Exception:
+            return []
+
+    def _unknown_model_help(self) -> str:
+        """A local server and a hosted API fail this way for opposite reasons.
+
+        Hosted: the id was retired or misspelled, so the fix is to go read the
+        provider's model list. Local: the id is fine, you simply have not
+        downloaded it — and sending someone to browse a model list points them
+        somewhere that cannot help. Ollama and LM Studio both answer /models,
+        so name what is actually installed rather than making them go look.
+        """
+        if not self.api_key_optional:
+            return (f"{self.name} does not know the model '{self.model}'. "
+                    f"Model ids change often — check the provider's model list "
+                    f"and update LLM_MODEL in your .env.")
+
+        fix = (f"Download it with:  ollama pull {self.model}"
+               if self.name == "ollama" else
+               "Load the model in LM Studio, or set LLM_MODEL to one below.")
+        have = self._installed()
+        listing = ("\n\nAlready installed:\n  " + "\n  ".join(have)) if have else ""
+        return (f"{self.name} is running, but '{self.model}' is not installed "
+                f"on it. {fix}{listing}")
+
     def _local_server_up(self) -> bool:
         return _probe(self.base_url)
 
@@ -136,10 +167,7 @@ class OpenAICompatProvider:
             hint = f" Set {self.key_env} in your .env." if self.key_env else ""
             raise LLMError(f"{self.name} rejected the API key.{hint}") from e
         except openai.NotFoundError as e:
-            raise LLMError(
-                f"{self.name} does not know the model '{self.model}'. Model ids "
-                f"change often — check the provider's model list and update "
-                f"LLM_MODEL in your .env.") from e
+            raise LLMError(self._unknown_model_help()) from e
         except openai.RateLimitError as e:
             raise LLMError(f"{self.name} rate limit hit. Wait and retry, or "
                            f"switch provider.") from e
