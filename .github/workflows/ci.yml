@@ -75,3 +75,114 @@ jobs:
       - name: Check the build produced something
         working-directory: web
         run: test -f dist/index.html
+
+  # The launcher is the first thing a new user touches and was the last thing
+  # anyone tested. It shipped for weeks with a bug that made every single run
+  # reinstall every package, because `certutil | find /v` picks up Git for
+  # Windows' GNU find.exe instead of the Windows one on most developer PATHs.
+  # Unit tests could never have caught that. Running the actual script can.
+  installer:
+    name: launcher · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # No pip/npm cache here on purpose: this job exists to prove a COLD
+      # first run works, which is the one path a returning developer never hits.
+      - name: First run creates the venv, installs, builds and serves (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x start.sh
+          ./start.sh > first.log 2>&1 &
+          for i in $(seq 1 300); do
+            curl -sf http://127.0.0.1:8000/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/api/health || { echo "--- launcher output ---"; cat first.log; exit 1; }
+          pkill -f "uvicorn server.main:app" || true
+
+      - name: First run creates the venv, installs, builds and serves (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process cmd -ArgumentList '/c','start.bat' -PassThru `
+                 -RedirectStandardOutput first.log -RedirectStandardError first.err
+          $ok = $false
+          foreach ($i in 1..300) {
+            try {
+              Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/api/health -TimeoutSec 2 | Out-Null
+              $ok = $true; break
+            } catch { Start-Sleep -Seconds 1 }
+          }
+          if (-not $ok) {
+            Write-Host "--- launcher output ---"; Get-Content first.log, first.err -EA SilentlyContinue
+            exit 1
+          }
+          Get-Process -Name python -EA SilentlyContinue | Stop-Process -Force
+
+      # The regression that motivated this job. A second run must reuse the
+      # recorded requirements hash and reinstall nothing.
+      - name: Second run reinstalls nothing (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          test -f .venv/.installed || { echo "no marker written - the fast path is broken"; exit 1; }
+          ./start.sh > second.log 2>&1 &
+          for i in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8000/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/api/health || { cat second.log; exit 1; }
+          pkill -f "uvicorn server.main:app" || true
+          if grep -q "installing Python packages" second.log; then
+            echo "second run reinstalled packages - the requirements marker is not working"
+            cat second.log
+            exit 1
+          fi
+
+      - name: Second run reinstalls nothing (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path .venv/.installed)) { throw "no marker written - the fast path is broken" }
+          Start-Process cmd -ArgumentList '/c','start.bat' -RedirectStandardOutput second.log -RedirectStandardError second.err
+          foreach ($i in 1..120) {
+            try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/api/health -TimeoutSec 2 | Out-Null; break }
+            catch { Start-Sleep -Seconds 1 }
+          }
+          Get-Process -Name python -EA SilentlyContinue | Stop-Process -Force
+          $log = Get-Content second.log -Raw -EA SilentlyContinue
+          if ($log -match 'installing Python packages') {
+            Write-Host $log
+            throw "second run reinstalled packages - the requirements marker is not working"
+          }
+          # The old code shelled out to `find`, which is shadowed by Git's on
+          # the PATH every GitHub Windows runner ships with.
+          if ($log -match 'find:') {
+            Write-Host $log
+            throw "the launcher shelled out to a Unix tool that shadowed the Windows one"
+          }
+
+      - name: A busy port is explained, not dumped as an errno
+        shell: python
+        run: |
+          import socket, subprocess, sys
+          s = socket.socket(); s.bind(("127.0.0.1", 8000)); s.listen(1)
+          r = subprocess.run([sys.executable, "tools/portcheck.py", "--port", "8000", "--check"],
+                             capture_output=True, text=True)
+          s.close()
+          print(r.stdout)
+          assert r.returncode != 0, "a taken port must fail the pre-flight"
+          assert "already in use" in r.stdout, r.stdout

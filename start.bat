@@ -51,9 +51,17 @@ echo   [ok] virtual environment
 REM --- python packages ------------------------------------------------------
 REM  A marker file records which requirements.txt we installed, so a re-run is
 REM  instant unless the file actually changed.
+REM  certutil prints three lines: a header, the hash, then a success message.
+REM  That used to be filtered with `find`, which breaks on any machine with Git
+REM  for Windows on PATH - its GNU find.exe shadows the Windows one and rejects
+REM  /v. The hash then never computed, the marker was never written, and every
+REM  single run reinstalled every package. skip=1 needs no external tool.
 set NEED_PIP=1
+set REQHASH=
+for /f "skip=1 delims=" %%a in ('certutil -hashfile requirements.txt MD5') do (
+  if not defined REQHASH set "REQHASH=%%a"
+)
 if exist ".venv\.installed" (
-  for /f %%a in ('certutil -hashfile requirements.txt MD5 ^| find /v ":" ^| find /v "CertUtil"') do set REQHASH=%%a
   set /p OLDHASH=<.venv\.installed
   if "!REQHASH!"=="!OLDHASH!" set NEED_PIP=0
 )
@@ -68,7 +76,8 @@ if "!NEED_PIP!"=="1" (
     pause
     exit /b 1
   )
-  for /f %%a in ('certutil -hashfile requirements.txt MD5 ^| find /v ":" ^| find /v "CertUtil"') do echo %%a> .venv\.installed
+  REM  Redirect written first so the value cannot be mistaken for a handle.
+  if defined REQHASH > .venv\.installed echo !REQHASH!
 )
 echo   [ok] Python packages
 
@@ -112,11 +121,23 @@ if not exist ".env" (
 )
 
 REM --- go -------------------------------------------------------------------
+REM --- port -----------------------------------------------------------------
+REM  Checked up front, because uvicorn's own failure is a bare
+REM  "[Errno 10048] ... bind on address" and then the window closes.
+%PY% tools\portcheck.py --port 8000 --check
+if errorlevel 1 (
+  echo.
+  pause
+  exit /b 1
+)
+
 echo.
-echo   Starting. Your browser will open in a moment.
+echo   Starting. Your browser will open once the server is ready.
 echo   Leave this window open. Press Ctrl+C here to stop.
 echo.
-start "" http://127.0.0.1:8000
+REM  The opener waits for the port to answer rather than firing immediately,
+REM  which used to greet first-time users with a connection-refused page.
+start "" /b %PY% tools\portcheck.py --port 8000 --open
 %PY% -m uvicorn server.main:app --port 8000
 
 echo.

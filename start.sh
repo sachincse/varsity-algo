@@ -71,9 +71,14 @@ fi
 
 # --- go -------------------------------------------------------------------
 echo
+# Checked up front: uvicorn's own failure is a bare "address already in use",
+# which never mentions the overwhelmingly likely cause - the app already
+# running in another terminal.
+"$PY" tools/portcheck.py --port 8000 --check || exit 1
+
 say "Open  http://127.0.0.1:8000"
 say "Press Ctrl+C to stop."
 echo
-( sleep 2; (command -v open >/dev/null && open http://127.0.0.1:8000) \
-        || (command -v xdg-open >/dev/null && xdg-open http://127.0.0.1:8000) ) >/dev/null 2>&1 &
+# Waits for the port to answer rather than sleeping two seconds and hoping.
+"$PY" tools/portcheck.py --port 8000 --open >/dev/null 2>&1 &
 exec "$PY" -m uvicorn server.main:app --port 8000
