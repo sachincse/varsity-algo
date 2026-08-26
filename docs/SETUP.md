@@ -159,9 +159,13 @@ Either way you will land on a URL like:
 http://127.0.0.1:8000/kite-redirect?request_token=AbCdEf123&action=login&status=success
 ```
 
-The page will show an error. That is expected and harmless — nothing is
-listening there, and the token you need is in the address bar. Paste the whole
-URL; the token is extracted for you.
+You do not have to copy anything. That address is served by the app itself, so
+it opens the **Connect** tab with the token already filled in — just press
+**Login**. (If you have not put your key and secret in `.env`, type them in
+first, then press Login.)
+
+The token is removed from the address bar straight afterwards, so it does not
+sit in your browser history.
 
 > **The `request_token` is single-use and dies after a couple of minutes.** If
 > you get "Kite rejected the login", the overwhelmingly likely cause is a stale

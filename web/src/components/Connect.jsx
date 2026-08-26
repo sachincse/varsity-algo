@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api'
 
 // The login page from the video: API key, API secret, request token.
@@ -20,6 +20,24 @@ export default function Connect({ config, onChange }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
+  const [caught, setCaught] = useState(false)
+
+  // Zerodha sends the browser back to the redirect URL with the token in the
+  // query string. That path falls through to this SPA, so rather than telling
+  // people to copy it out of the address bar by hand, take it from the URL and
+  // clean the bar afterwards — a token left in history is a token that leaks.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const rt = q.get('request_token')
+    if (!rt) return
+    setToken(rt)
+    setCaught(true)
+    if (q.get('status') === 'error' || q.get('status') === 'cancelled') {
+      setErr(`Zerodha reported "${q.get('status')}". Try the login link again.`)
+    }
+    window.history.replaceState({}, '', window.location.pathname === '/kite-redirect'
+      ? '/' : window.location.pathname)
+  }, [])
 
   const loginUrl = kite?.login_url
     || (apiKey.trim() ? `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey.trim()}` : '')
@@ -113,9 +131,9 @@ export default function Connect({ config, onChange }) {
           {loginUrl ? (
             <>
               <a href={loginUrl} target="_blank" rel="noreferrer">
-                Open the Kite login page</a> and sign in. You land on your
-              redirect URL — the page will show an error, which is expected and
-              harmless. Copy the address bar and paste it below.
+                Open the Kite login page</a> and sign in. Zerodha sends you
+              back here with the token already filled in — nothing to copy.
+              If you landed here some other way, paste the address bar below.
             </>
           ) : (
             <>Enter your API key above and a login link will appear here.</>
@@ -126,6 +144,16 @@ export default function Connect({ config, onChange }) {
             fails, that is almost always why — get a fresh one.
           </span>
         </div>
+
+        {caught && (
+          <div className="msg info" style={{ marginTop: 14 }}>
+            <strong>Got your request token from the address bar.</strong>{' '}
+            {fromEnv
+              ? 'Press Login.'
+              : 'Fill in your API key and secret above, then press Login.'}{' '}
+            It expires in a couple of minutes, so do it now.
+          </div>
+        )}
 
         <div className="row" style={{ marginTop: 14 }}>
           <div className="grow">
