@@ -143,6 +143,20 @@ class OpenAICompatProvider:
         except openai.RateLimitError as e:
             raise LLMError(f"{self.name} rate limit hit. Wait and retry, or "
                            f"switch provider.") from e
+        except openai.InternalServerError as e:
+            raise LLMError(
+                f"{self.name} returned a server error for '{self.model}' "
+                f"(often 'model is overloaded'). Nothing is wrong on your side "
+                f"— retry shortly, or set LLM_MODEL to a different model.") from e
+        except openai.APITimeoutError as e:
+            # Must precede APIConnectionError — APITimeoutError subclasses it,
+            # so the broader handler would otherwise report a slow model as an
+            # unreachable host and send people to debug their network.
+            raise LLMError(
+                f"{self.name} did not answer within 120s using "
+                f"'{self.model}'. The host is reachable, so it is the model "
+                f"being slow or overloaded, not your connection. Try a "
+                f"smaller/faster model, or another provider.") from e
         except openai.APIConnectionError as e:
             extra = ""
             if "localhost" in self.base_url or "127.0.0.1" in self.base_url:
@@ -162,6 +176,20 @@ class OpenAICompatProvider:
 
         choice = resp.choices[0]
         text = choice.message.content or ""
+        if not text.strip():
+            # Reasoning models bill thinking against max_tokens. Hit the cap
+            # while still thinking and the API returns finish_reason='length'
+            # with completion_tokens=0 and no content at all — which reads as
+            # "the model said nothing" unless you name the real cause.
+            if choice.finish_reason == "length":
+                raise LLMError(
+                    f"{self.name} hit the output limit before writing anything "
+                    f"— '{self.model}' is a reasoning model and spent the whole "
+                    f"budget thinking. Raise max_tokens, or pick a "
+                    f"non-reasoning model.")
+            raise LLMError(
+                f"{self.name} returned an empty response for '{self.model}' "
+                f"(finish_reason={choice.finish_reason!r}).")
         usage = {}
         if resp.usage:
             usage = {"input_tokens": resp.usage.prompt_tokens,

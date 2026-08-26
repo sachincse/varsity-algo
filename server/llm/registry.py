@@ -103,11 +103,12 @@ CATALOG: dict[str, ProviderInfo] = {
     "gemini": ProviderInfo(
         key="gemini", label="Google Gemini",
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        key_env="GEMINI_API_KEY", default_model="gemini-3.7-flash",
+        key_env="GEMINI_API_KEY", default_model="gemini-3.6-flash",
         json_mode="json_object", open_weights=False,
         signup="https://aistudio.google.com/apikey",
         note="Generous free tier on Flash models. The trailing slash on the "
-             "base URL is required."),
+             "base URL is required. Flash models reason before answering, so "
+             "they need a generous max_tokens or they return nothing at all."),
 
     "mistral": ProviderInfo(
         key="mistral", label="Mistral",
