@@ -18,9 +18,11 @@ def health() -> dict:
 def config() -> dict:
     """Everything the setup panel needs, with no secrets in the response."""
     from server.kite_client import SESSION
+    from server.price_source import resolve as resolve_source
     from server.llm.registry import CATALOG, active_key, survey
 
     key = active_key()
+    source, pinned = resolve_source()
     return {
         "kite": SESSION.status(),
         "llm": {
@@ -30,6 +32,7 @@ def config() -> dict:
                      or (CATALOG[key].default_model if key in CATALOG else ""),
             "providers": survey(),
         },
-        "price_source": os.getenv("PRICE_SOURCE", "yfinance"),
+        "price_source": source,
+        "price_source_pinned": pinned,
         "trading_enabled": os.getenv("ENABLE_TRADING", "false").lower() == "true",
     }

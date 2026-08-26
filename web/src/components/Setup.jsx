@@ -49,7 +49,13 @@ export default function Setup({ config }) {
       <div className="panel">
         <h2>Price data</h2>
         <p className="sub">
-          Currently using <strong>{config.price_source || 'automatic'}</strong>.
+          Currently using{' '}
+          <strong>{config.price_source === 'kite' ? 'Kite' : 'Yahoo'}</strong>
+          {config.price_source_pinned
+            ? <> — pinned by <code>PRICE_SOURCE</code> in your <code>.env</code>.</>
+            : config.price_source === 'kite'
+              ? <> — chosen automatically, because your Kite session is live.</>
+              : <> — chosen automatically, because no Kite session is live.</>}
         </p>
         <ul className="notes">
           <li>

@@ -190,6 +190,8 @@ def build_provider(key: str | None = None, model: str | None = None):
 
 def survey() -> list[dict]:
     """Which providers look usable right now — for the UI's setup panel."""
+    active = active_key()
+    override = os.getenv("LLM_MODEL", "").strip()
     out = []
     for k in DEFAULT_ORDER:
         info = CATALOG[k]
@@ -200,7 +202,12 @@ def survey() -> list[dict]:
             configured = False
         out.append({
             "key": k, "label": info.label,
-            "model": os.getenv("LLM_MODEL") or info.default_model,
+            # LLM_MODEL overrides the model for the provider you are actually
+            # using, not for all twelve. Applying it across the board made the
+            # settings panel claim Anthropic runs 'qwen2.5:7b' — every row
+            # showed whatever local model happened to be selected, which is
+            # both wrong and the exact opposite of what this panel is for.
+            "model": override if (override and k == active) else info.default_model,
             "env_var": info.key_env, "has_key": has_key,
             "configured": configured, "open_weights": info.open_weights,
             "local": info.key_optional and "localhost" in info.base_url,

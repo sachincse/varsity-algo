@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     log.info("  LLM provider   %s", active_key())
     log.info("  Kite API key   %s",
              "set" if SESSION.api_key else "NOT SET (see docs/SETUP.md)")
-    log.info("  price source   %s", os.getenv("PRICE_SOURCE", "yfinance"))
+    log.info("  price source   %s%s", *(lambda s, p: (s, "" if p else "  (auto)"))(*__import__("server.price_source", fromlist=["resolve"]).resolve()))
 
     # The provider SDKs are imported lazily so a missing one is not fatal, but
     # that pushes a multi-second import onto whichever request touches it

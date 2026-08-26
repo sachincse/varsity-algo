@@ -13,6 +13,7 @@ from core.engine import run_spec, warmup_bars
 from core.spec import VARSITY_DEFAULT, StrategySpec
 from server.jobs import STORE, Job
 from server.kite_client import SESSION, KiteNotAuthenticated
+from server.price_source import resolve as resolve_source
 
 router = APIRouter()
 log = logging.getLogger("varsity.scan")
@@ -125,13 +126,7 @@ def _resolve(body: "ScanBody") -> tuple[StrategySpec, str]:
     except ValidationError as e:
         raise HTTPException(status_code=422,
                             detail=f"invalid strategy spec: {e}") from e
-    # The video pulls candles from Kite. Once a session is live we do the same,
-    # so prices match the broker's own chart. Without a session we fall back to
-    # the free feed rather than refusing to run.
-    default = os.getenv("PRICE_SOURCE", "").strip().lower()
-    if not default:
-        default = "kite" if SESSION.is_live() else "yfinance"
-    source = (body.source or default).lower()
+    source, _pinned = resolve_source(body.source)
     return spec, source
 
 
