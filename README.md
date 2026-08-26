@@ -26,7 +26,7 @@ before paying for anything.
 
 [![Tutorial](docs/img/video-poster.png)](https://github.com/sachincse/varsity-algo/releases/latest)
 
-**▶ [Download the tutorial (4 min, narrated)](https://github.com/sachincse/varsity-algo/releases/latest)**
+**▶ [Download the tutorial (5 min, narrated)](https://github.com/sachincse/varsity-algo/releases/latest)**
 — or [docs/varsity-algo-tutorial.mp4](docs/varsity-algo-tutorial.mp4) in the repo.
 
 Install, first scan, building a strategy from English, and the order
@@ -68,7 +68,7 @@ Full walkthrough, including every error message and its fix:
 | | |
 |---|---|
 | ![Connect](docs/img/connect.png) | **Connect** — the video's login page: API key, API secret, request token. Credentials typed here stay in memory; put them in `.env` and only the token is needed each morning. |
-| ![Account](docs/img/setup.png) | **Account** — the video's user tab. Straight from the Kite profile API: user ID, name, products, exchanges — plus holdings and available funds. |
+| ![Account](docs/img/setup.png) | **Account** — the video's user tab: user ID, name, products and exchanges from the Kite profile API, plus holdings and funds. **Settings** lists every model option and which price source is live. |
 | ![Strategy](docs/img/strategy.png) | **Strategy** — type the rule the way you would say it. The model fills a fixed schema; it never writes or runs code. |
 | ![Signals](docs/img/signals.png) | **Signals** — Short SMA, Long SMA, Lookback and Max, then a table ranked by crossover recency showing the close beside both moving averages, so you can check a signal by eye. |
 | ![Orders](docs/img/orders.png) | **Orders** — signals become a sized order sheet. Placement is off by default and every order needs its own confirmation. |

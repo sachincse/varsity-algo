@@ -34,9 +34,7 @@ SCRIPT: dict[str, str] = {
         "You need two free things installed: Python, and Node. "
         "When you install Python, make sure you tick the box that says "
         "add python dot exe to PATH. That one checkbox is the most common "
-        "reason setups fail. "
-        "A Zerodha account is optional — the scanner runs on free "
-        "end-of-day data."
+        "reason setups fail."
     ),
     "s03": (
         "Download the project from GitHub. "
@@ -46,24 +44,35 @@ SCRIPT: dict[str, str] = {
         "The first run takes a few minutes. After that it is quick."
     ),
     "s04": (
-        "Here is the dashboard, running on your own machine at localhost. "
-        "The setup tab shows every language model option, and whether it is "
-        "ready to use. Green means you can use it right now."
+        "This first tab connects the app to your Zerodha account. "
+        "Paste in your API key and secret, and a login link appears. "
+        "Sign in at Zerodha, and you get sent back with a request token in "
+        "the address bar. Copy the whole address and paste it in. "
+        "After that, prices come from Kite, so what you see here matches the "
+        "chart in your own terminal."
     ),
     "s05": (
-        "The language model is optional. It is only used to turn your English "
-        "into a strategy. "
+        "You do not have to connect straight away, though. "
+        "Without a Zerodha session the scanner falls back to free "
+        "end-of-day data, so you can try the whole thing before you pay for "
+        "anything. "
+        "The settings tab shows which data source is in use, and every "
+        "language model option."
+    ),
+    "s06": (
+        "The language model is optional too. It is only used to turn your "
+        "English into a strategy. "
         "Groq, Google Gemini and OpenRouter all have free tiers, and none of "
         "them ask for a credit card. "
         "Pick one, paste the key into the env file, and restart."
     ),
-    "s05b": (
+    "s06b": (
         "Or skip the keys entirely. "
         "Ollama runs an open model on your own laptop. Nothing leaves your "
         "machine, and it costs nothing. "
         "This whole tutorial was recorded that way."
     ),
-    "s06": (
+    "s07": (
         "Now type the rule the way you would say it out loud. "
         "Golden cross on the nifty five hundred, but only if RSI is under "
         "seventy. "
@@ -74,25 +83,29 @@ SCRIPT: dict[str, str] = {
         "If the model gets creative, the strategy is rejected before anything "
         "runs."
     ),
-    "s07": (
-        "Now scan. "
+    "s08": (
+        "The signals tab has the same four controls as the video: "
+        "short moving average, long moving average, lookback, and how many "
+        "rows you want back. "
+        "Hit generate. "
         "The first time, it downloads every stock in the universe, so give it "
         "a few minutes. You get a progress bar, so you know it is working. "
         "After that it is cached. "
-        "The results are ranked by how recently each signal fired. "
-        "Green is an entry, red is an exit. "
-        "And an exit means sell something you already own. It is not a short. "
-        "In India, a retail account cannot hold a short equity position "
+        "Results are ranked by how recently each crossover fired, and each row "
+        "shows the closing price next to both moving averages — so you can "
+        "check the signal is real rather than taking it on trust. "
+        "And a bearish row means sell something you already own. It is not a "
+        "short. In India, a retail account cannot hold a short equity position "
         "overnight."
     ),
-    "s08": (
+    "s09": (
         "The signals become a sized order sheet, split evenly across your "
         "open slots. "
         "Placing orders is switched off until you deliberately turn it on. "
         "Preview always works, so nothing is ever sent by surprise. "
         "And orders go one at a time. There is no place-all button."
     ),
-    "s09": (
+    "s10": (
         "Now the part most tutorials leave out. "
         "This strategy does not beat the index. "
         "Tested properly, over fifteen years, with real charges and realistic "
@@ -101,14 +114,14 @@ SCRIPT: dict[str, str] = {
         "Just holding the same stocks, with no timing rule at all, did better "
         "than both."
     ),
-    "s10": (
+    "s11": (
         "So treat the scanner as a lens for seeing what is moving, "
         "not as a system to follow. "
         "The genuinely useful part is the machinery around it — "
         "the cost model, the tests that prove it cannot see the future, "
         "and the guardrails on every order."
     ),
-    "s11": (
+    "s12": (
         "It is free, it is MIT licensed, and the link is on screen. "
         "The setup guide lists every error message you might hit, "
         "and how to fix it. "

@@ -438,7 +438,8 @@ def main() -> None:
     a = ap.parse_args()
 
     clips = Path(a.clips)
-    for f in ("01-setup", "02-strategy", "03-scan", "04-orders"):
+    for f in ("01-connect", "02-settings", "03-strategy", "04-signals",
+              "05-orders"):
         if not (clips / f"{f}.webm").exists():
             sys.exit(f"missing {f}.webm — run tools/record_app.py first")
 
@@ -482,12 +483,10 @@ def main() -> None:
     add_named("s01", still_clip(WORK / "s01.mp4", WORK / "c1.png", want("s01", 5.0)))
 
     # ---- 2. what you need -------------------------------------------------
-    card(WORK / "c2.png", eyebrow="Step 1  ·  What you need",
+    card(WORK / "c2.png", eyebrow="Step 1  \u00b7  What you need",
          title="Two free installs",
-         bullets=["Python 3.11 or newer  —  python.org/downloads",
-                  "Node.js 20.19+ or 22.12+  —  nodejs.org",
-                  "A Zerodha account is OPTIONAL. The scanner runs "
-                  "on free end-of-day data."],
+         bullets=["Python 3.11 or newer  \u2014  python.org/downloads",
+                  "Node.js 20.19+ or 22.12+  \u2014  nodejs.org"],
          mono=["# on the Python installer, tick this box:",
                "  [x] Add python.exe to PATH"], accent=BUY)
     add_named("s02", still_clip(WORK / "s02.mp4", WORK / "c2.png", want("s02", 8.5)))
@@ -509,30 +508,50 @@ def main() -> None:
         ("out", "Starting. Your browser will open in a moment."),
     ], hold=2.6))
 
-    # ---- 4. the dashboard -------------------------------------------------
-    add_named("s04", screencast(WORK / "s04.mp4", clips / "01-setup.webm", [
-        {"t": C("01-setup", "tour", 4.2), "dur": 4.2,
-         "text": "The dashboard opens at localhost:8000",
-         "sub": "No API key needed to get this far."},
-        {"t": C("01-setup", "providers", 6.1), "dur": 3.6,
-         "text": "Every language model option, and whether it is ready",
-         "sub": "Green means you can use it right now."},
-    ], trim_from=max(0.0, C("01-setup", "ready", 2.8) - 0.6)))
+    # ---- 4. Connect: the video's login page -------------------------------
+    c_form = C("01-connect", "form", 3.0)
+    c_link = C("01-connect", "loginlink", 10.5)
+    c_tok = C("01-connect", "token", 13.1)
+    add_named("s04", screencast(WORK / "s04.mp4", clips / "01-connect.webm", [
+        {"t": c_form + 0.4, "dur": 5.0,
+         "text": "API key, API secret, request token — the video's login page",
+         "sub": "Typed here they stay in memory. Put them in .env to keep them."},
+        {"t": c_link + 0.3, "dur": 4.6,
+         "text": "The login link builds itself from your key",
+         "sub": "Sign in at Zerodha; it sends you back with a token.",
+         "accent": BUY},
+        {"t": c_tok + 1.6, "dur": 5.6,
+         "text": "Paste the whole redirected address — the token is pulled out",
+         "sub": "It is single-use and expires in minutes. If login fails, that is why.",
+         "accent": WARN},
+    ], trim_from=max(0.0, C("01-connect", "ready", 1.4) - 0.7)))
 
-    # ---- 5. free LLM ------------------------------------------------------
-    card(WORK / "c5.png", eyebrow="Step 2  ·  Optional",
+    # ---- 5. Settings: providers + the data source -------------------------
+    s_prov = C("02-settings", "providers", 3.0)
+    s_price = C("02-settings", "pricedata", 8.0)
+    add_named("s05", screencast(WORK / "s05.mp4", clips / "02-settings.webm", [
+        {"t": s_prov + 0.6, "dur": 5.0,
+         "text": "Not connected yet? It runs on free end-of-day data",
+         "sub": "So you can try everything before paying for anything."},
+        {"t": s_price + 0.4, "dur": 5.0,
+         "text": "Kite once you connect, Yahoo until then",
+         "sub": "Set PRICE_SOURCE in .env to force either one."},
+    ], trim_from=max(0.0, s_prov - 1.4)))
+
+    # ---- 6. free LLM ------------------------------------------------------
+    card(WORK / "c6.png", eyebrow="Optional",
          title="Add a free language model",
-         body="This is only used to turn your English into a strategy. "
-              "Pick one — all three are free and need no credit card.",
-         bullets=["Groq  —  console.groq.com/keys",
-                  "Google Gemini  —  aistudio.google.com/apikey",
-                  "OpenRouter  —  openrouter.ai/keys"],
+         body="Only used to turn your English into a strategy. Pick one \u2014 "
+              "all three are free and need no credit card.",
+         bullets=["Groq  \u2014  console.groq.com/keys",
+                  "Google Gemini  \u2014  aistudio.google.com/apikey",
+                  "OpenRouter  \u2014  openrouter.ai/keys"],
          mono=["# paste into the .env file, then restart",
                "LLM_PROVIDER=groq",
                "GROQ_API_KEY=gsk_your_key_here"], accent=BUY)
-    add_named("s05", still_clip(WORK / "s05.mp4", WORK / "c5.png", want("s05", 10.0)))
+    add_named("s06", still_clip(WORK / "s06.mp4", WORK / "c6.png", want("s06", 10.0)))
 
-    card(WORK / "c5b.png", eyebrow="Or run it entirely offline",
+    card(WORK / "c6b.png", eyebrow="Or run it entirely offline",
          title="No key. No cost. No data leaves your laptop.",
          body="Ollama runs an open-weight model on your own machine. "
               "This tutorial was recorded using exactly this.",
@@ -542,13 +561,14 @@ def main() -> None:
                "# .env",
                "LLM_PROVIDER=ollama",
                "LLM_MODEL=qwen3:8b"], accent=WARN)
-    add_named("s05b", still_clip(WORK / "s05b.mp4", WORK / "c5b.png", want("s05b", 9.5)))
+    add_named("s06b", still_clip(WORK / "s06b.mp4", WORK / "c6b.png",
+                                 want("s06b", 9.5)))
 
-    # ---- 6. describe in English ------------------------------------------
-    t_type = C("02-strategy", "typing", 4.0)
-    t_think = C("02-strategy", "thinking", 11.9)
-    t_ans = C("02-strategy", "answered", 39.4)
-    add_named("s06", screencast(WORK / "s06.mp4", clips / "02-strategy.webm", [
+    # ---- 7. describe in English ------------------------------------------
+    t_type = C("03-strategy", "typing", 4.0)
+    t_think = C("03-strategy", "thinking", 11.9)
+    t_ans = C("03-strategy", "answered", 39.4)
+    add_named("s07", screencast(WORK / "s07.mp4", clips / "03-strategy.webm", [
         {"t": t_type + 0.6, "dur": 5.2,
          "text": "Type the rule the way you would say it out loud",
          "sub": "No syntax to learn."},
@@ -563,71 +583,77 @@ def main() -> None:
     ], trim_from=max(0.0, t_type - 1.6),
        speed=(t_think + 1.2, t_ans - 0.6, 3.2)))
 
-    # ---- 7. scan ----------------------------------------------------------
-    t_run = C("03-scan", "run", 9.3)
-    t_res = C("03-scan", "results", 27.6)
-    t_warn = C("03-scan", "shortwarning", 34.6)
-    add_named("s07", screencast(WORK / "s07.mp4", clips / "03-scan.webm", [
-        {"t": t_run + 1.4, "dur": 4.6,
+    # ---- 8. Signals: the four controls, then the scan ---------------------
+    g_ctrl = C("04-signals", "controls", 5.0)
+    g_run = C("04-signals", "run", 9.0)
+    g_res = C("04-signals", "results", 27.0)
+    g_cols = C("04-signals", "columns", 30.0)
+    g_warn = C("04-signals", "shortwarning", 36.0)
+    add_named("s08", screencast(WORK / "s08.mp4", clips / "04-signals.webm", [
+        {"t": g_ctrl + 0.5, "dur": 4.6,
+         "text": "Short SMA, Long SMA, Lookback, Max \u2014 as in the video",
+         "sub": "They edit the strategy directly."},
+        {"t": g_run + 1.6, "dur": 4.4,
          "text": "The first scan downloads every symbol in the universe",
          "sub": "A few minutes once, then cached and near-instant."},
-        {"t": t_res + 0.5, "dur": 4.6,
-         "text": "Ranked by how recently each signal fired",
-         "sub": "Green ENTRY, red EXIT."},
-        {"t": t_warn - 0.4, "dur": 5.2,
-         "text": "An EXIT means sell something you own \u2014 never a short",
+        {"t": g_cols + 0.4, "dur": 5.2,
+         "text": "Close, SMA(6) and SMA(30) on every row",
+         "sub": "So you can check the crossover is real, not take it on trust.",
+         "accent": BUY},
+        {"t": g_warn - 0.4, "dur": 5.2,
+         "text": "BEARISH means sell what you own \u2014 never a short",
          "sub": "Retail cannot hold a short equity position overnight in India.",
          "accent": SELL},
-    ], trim_from=max(0.0, t_run - 1.8),
-       speed=(t_run + 6.0, max(t_run + 7.0, t_res - 1.5), 3.0)))
+    ], trim_from=max(0.0, g_ctrl - 1.8),
+       speed=(g_run + 6.0, max(g_run + 7.0, g_res - 1.5), 3.0)))
 
-    # ---- 8. orders --------------------------------------------------------
-    t_sheet = C("04-orders", "sheet", 14.7)
-    t_ord = C("04-orders", "orders", 20.6)
-    t_guard = C("04-orders", "guardrail", 22.4)
-    add_named("s08", screencast(WORK / "s08.mp4", clips / "04-orders.webm", [
-        {"t": t_sheet + 0.8, "dur": 4.4,
+    # ---- 9. orders --------------------------------------------------------
+    o_sheet = C("05-orders", "sheet", 14.7)
+    o_ord = C("05-orders", "orders", 20.6)
+    o_guard = C("05-orders", "guardrail", 22.4)
+    add_named("s09", screencast(WORK / "s09.mp4", clips / "05-orders.webm", [
+        {"t": o_sheet + 0.8, "dur": 4.4,
          "text": "Signals become a sized order sheet",
          "sub": "Equal weight across your open slots."},
-        {"t": t_ord + 0.6, "dur": 4.6,
+        {"t": o_ord + 0.6, "dur": 4.6,
          "text": "Order placement is OFF until you turn it on in .env",
          "sub": "Preview always works. Nothing is ever sent by surprise.",
          "accent": BUY},
-        {"t": t_guard + 1.4, "dur": 5.0,
+        {"t": o_guard + 1.4, "dur": 5.0,
          "text": "One order at a time. There is no 'place all'.",
          "sub": "Each needs a fresh preview token and a typed confirmation.",
          "accent": WARN},
-    ], trim_from=max(0.0, t_sheet - 2.2)))
+    ], trim_from=max(0.0, o_sheet - 2.2)))
 
-    # ---- 9. the honest part ----------------------------------------------
-    card(WORK / "c9.png", eyebrow="Before you trade any of this",
+    # ---- 10. the honest part ----------------------------------------------
+    card(WORK / "c10.png", eyebrow="Before you trade any of this",
          title="The strategy does not beat the index",
-         body="SMA 6/30 on the Nifty 100, tested 2011–2026 with next-open "
+         body="SMA 6/30 on the Nifty 100, tested 2011\u20132026 with next-open "
               "fills, real Zerodha charges and a point-in-time universe:",
          mono=["  the rule, honestly tested      1.92%  a year",
                "  Nifty 100 index fund          10.70%  a year",
                "  same stocks, no timing rule   11.90%  a year"],
          accent=SELL)
-    add_named("s09", still_clip(WORK / "s09.mp4", WORK / "c9.png", want("s09", 11.0)))
+    add_named("s10", still_clip(WORK / "s10.mp4", WORK / "c10.png", want("s10", 11.0)))
 
-    card(WORK / "c10.png", eyebrow="So what is it for",
+    card(WORK / "c11.png", eyebrow="So what is it for",
          title="A lens, not a system",
          body="The scanner is genuinely useful for seeing what is moving. "
-              "The machinery around it — cost modelling, leak-free testing, "
-              "order guardrails — is the part worth keeping.",
+              "The machinery around it \u2014 cost modelling, leak-free testing, "
+              "order guardrails \u2014 is the part worth keeping.",
          bullets=["44 tests, including a future-scramble causality proof",
                   "Full backtest and evidence in the README"])
-    add_named("s10", still_clip(WORK / "s10.mp4", WORK / "c10.png", want("s10", 9.5)))
+    add_named("s11", still_clip(WORK / "s11.mp4", WORK / "c11.png", want("s11", 9.5)))
 
-    # ---- 10. end ----------------------------------------------------------
-    card(WORK / "c11.png", eyebrow="MIT licensed  ·  free forever",
+    # ---- 11. end ----------------------------------------------------------
+    card(WORK / "c12.png", eyebrow="MIT licensed  \u00b7  free forever",
          title="Get it",
-         big="↓",
+         big="\u2193",
          mono=["github.com/sachincse/varsity-algo",
                "",
                "# setup guide, every error message, and the fix",
                "docs/SETUP.md"])
-    add_named("s11", still_clip(WORK / "s11.mp4", WORK / "c11.png", want("s11", 7.0)))
+    add_named("s12", still_clip(WORK / "s12.mp4", WORK / "c12.png", want("s12", 7.0)))
 
     print("\nstitching with crossfades")
     silent = WORK / "_silent.mp4"

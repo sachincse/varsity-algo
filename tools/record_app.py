@@ -196,33 +196,72 @@ def record(out_dir: Path, scan_timeout_ms: int) -> list[Path]:
         # does. Cue times are therefore offsets into the recorded file, which
         # is what the editor needs to trim dead lead-in and time captions.
 
-        # ---- clip 1: the dashboard on first open --------------------------
-        print("recording 01-setup")
+        # ---- clip 1: the Connect tab — the video's login page --------------
+        print("recording 01-connect")
         ctx = new_ctx("01")
         page = ctx.new_page()
         page.add_init_script(ZOOM_JS)
         cam = Cam(page)
         open_app(page)
         cam.mark("ready")
-        cam.beat(1.4)
-        cam.mark("tour")
-        cam.scroll(520)
-        cam.beat(0.8)
-        cam.mark("providers")
-        cam.scroll(620)
         cam.beat(1.6)
+        cam.mark("form")
+        # A placeholder, not a real key. Enough to show the login link appear.
+        cam.type_in(page.get_by_label("API key"), "your_api_key_here")
+        cam.beat(0.5)
+        cam.type_in(page.get_by_label("API secret"), "your_api_secret")
+        cam.beat(0.8)
+        cam.mark("loginlink")
+        try:
+            cam.move_to(page.get_by_role("link", name="Open the Kite login page"))
+        except Exception:
+            pass
+        cam.beat(1.8)
+        # Show the token being pasted — the narration describes exactly this,
+        # and it gives the shot motion instead of a long freeze.
+        cam.mark("token")
+        cam.type_in(
+            page.get_by_label("Request token"),
+            "http://127.0.0.1:8000/kite-redirect?request_token=AbCdEf123456"
+            "&action=login&status=success")
+        cam.beat(1.6)
+        cam.mark("ready_to_login")
+        try:
+            cam.move_to(page.get_by_role("button", name="Login", exact=True))
+        except Exception:
+            pass
+        cam.beat(2.6)
         cam.mark("end")
-        cue(cam, "01-setup")
-        clips.append(finish(ctx, page, "01-setup"))
+        cue(cam, "01-connect")
+        clips.append(finish(ctx, page, "01-connect"))
 
-        # ---- clip 2: describe a strategy in English -----------------------
-        print("recording 02-strategy")
+        # ---- clip 2: Settings — every model option, and the data source ----
+        print("recording 02-settings")
         ctx = new_ctx("02")
         page = ctx.new_page()
         page.add_init_script(ZOOM_JS)
         cam = Cam(page)
         open_app(page)
-        cam.click(page.get_by_role("button", name="Strategy"))
+        cam.click(page.get_by_role("button", name="Settings", exact=True))
+        cam.mark("providers")
+        cam.beat(1.6)
+        cam.scroll(560)
+        cam.beat(1.4)
+        cam.mark("pricedata")
+        cam.scroll(620)
+        cam.beat(2.4)
+        cam.mark("end")
+        cue(cam, "02-settings")
+        clips.append(finish(ctx, page, "02-settings"))
+
+        # ---- clip 3: describe a strategy in English -----------------------
+        print("recording 03-strategy")
+        ctx = new_ctx("03")
+        page = ctx.new_page()
+        page.add_init_script(ZOOM_JS)
+        cam = Cam(page)
+        open_app(page)
+        cam.click(page.get_by_role("button", name="Strategy", exact=True))
         cam.beat(0.5)
         cam.mark("typing")
         cam.type_in(page.get_by_label("Your rule"),
@@ -230,10 +269,6 @@ def record(out_dir: Path, scan_timeout_ms: int) -> list[Path]:
         cam.beat(0.6)
         cam.click(page.get_by_role("button", name="Build strategy"), settle=0.4)
         cam.mark("thinking")
-        # The .spec block is ALREADY on screen — the app preloads the built-in
-        # rule — so waiting for it returns instantly and we would film nothing.
-        # Wait for the "Built by <provider>/<model>" line, which only appears
-        # once a model has actually answered.
         try:
             page.get_by_text("Built by").wait_for(timeout=240_000)
             page.wait_for_timeout(400)
@@ -247,47 +282,53 @@ def record(out_dir: Path, scan_timeout_ms: int) -> list[Path]:
         cam.scroll(430)
         cam.beat(3.0)
         cam.mark("end")
-        cue(cam, "02-strategy")
-        clips.append(finish(ctx, page, "02-strategy"))
+        cue(cam, "03-strategy")
+        clips.append(finish(ctx, page, "03-strategy"))
 
-        # ---- clip 3: scan, with the progress bar --------------------------
-        print("recording 03-scan (this waits for a real scan)")
-        ctx = new_ctx("03")
-        page = ctx.new_page()
-        page.add_init_script(ZOOM_JS)
-        cam = Cam(page)
-        open_app(page)
-        cam.click(page.get_by_role("button", name="Strategy"))
-        cam.click(page.get_by_role("button", name="Use the video's SMA 6/30"), settle=0.7)
-        cam.click(page.get_by_role("button", name="Scan for signals"))
-        cam.beat(0.5)
-        cam.mark("run")
-        cam.click(page.get_by_role("button", name="Run scan"), settle=0.4)
-        page.wait_for_selector("table", timeout=scan_timeout_ms)
-        cam.mark("results")
-        cam.beat(1.8)
-        cam.mark("scroll")
-        cam.scroll(560)
-        cam.beat(1.4)
-        cam.scroll(700)
-        cam.beat(1.2)
-        cam.mark("shortwarning")
-        cam.beat(2.4)
-        cam.mark("end")
-        cue(cam, "03-scan")
-        clips.append(finish(ctx, page, "03-scan"))
-
-        # ---- clip 4: order sheet + the guardrails -------------------------
-        print("recording 04-orders")
+        # ---- clip 4: Signals — the video's four controls, then a scan ------
+        print("recording 04-signals (waits for a real scan)")
         ctx = new_ctx("04")
         page = ctx.new_page()
         page.add_init_script(ZOOM_JS)
         cam = Cam(page)
         open_app(page)
-        cam.click(page.get_by_role("button", name="Strategy"))
+        cam.click(page.get_by_role("button", name="Strategy", exact=True))
+        cam.click(page.get_by_role("button", name="Use the video's SMA 6/30"), settle=0.7)
+        cam.click(page.get_by_role("button", name="Signals", exact=True))
+        cam.beat(0.7)
+        cam.mark("controls")
+        # Walk the cursor across the four controls so the viewer sees them.
+        for lab in ("Short SMA", "Long SMA", "Lookback", "Max rows"):
+            cam.move_to(page.get_by_label(lab))
+            cam.beat(0.75)
+        cam.beat(0.6)
+        cam.mark("run")
+        cam.click(page.get_by_role("button", name="Generate signals"), settle=0.4)
+        page.wait_for_selector("table", timeout=scan_timeout_ms)
+        cam.mark("results")
+        cam.beat(2.0)
+        cam.mark("columns")
+        cam.scroll(520)
+        cam.beat(2.2)
+        cam.scroll(680)
+        cam.beat(1.2)
+        cam.mark("shortwarning")
+        cam.beat(2.6)
+        cam.mark("end")
+        cue(cam, "04-signals")
+        clips.append(finish(ctx, page, "04-signals"))
+
+        # ---- clip 5: order sheet + the guardrails --------------------------
+        print("recording 05-orders")
+        ctx = new_ctx("05")
+        page = ctx.new_page()
+        page.add_init_script(ZOOM_JS)
+        cam = Cam(page)
+        open_app(page)
+        cam.click(page.get_by_role("button", name="Strategy", exact=True))
         cam.click(page.get_by_role("button", name="Use the video's SMA 6/30"), settle=0.5)
-        cam.click(page.get_by_role("button", name="Scan for signals"))
-        cam.click(page.get_by_role("button", name="Run scan"), settle=0.4)
+        cam.click(page.get_by_role("button", name="Signals", exact=True))
+        cam.click(page.get_by_role("button", name="Generate signals"), settle=0.4)
         page.wait_for_selector("table", timeout=scan_timeout_ms)
         cam.beat(0.5)
         cam.click(page.get_by_role("button", name="Build an order sheet"))
@@ -297,13 +338,13 @@ def record(out_dir: Path, scan_timeout_ms: int) -> list[Path]:
         cam.click(page.get_by_role("button", name="Preview orders"), settle=1.2)
         page.wait_for_selector("tbody tr", timeout=60_000)
         cam.mark("orders")
-        cam.beat(1.8)
+        cam.beat(2.0)
         cam.mark("guardrail")
         cam.scroll(620)
-        cam.beat(2.6)
+        cam.beat(2.8)
         cam.mark("end")
-        cue(cam, "04-orders")
-        clips.append(finish(ctx, page, "04-orders"))
+        cue(cam, "05-orders")
+        clips.append(finish(ctx, page, "05-orders"))
 
         browser.close()
 
