@@ -127,7 +127,7 @@ connect — same data, same broker, same chart. But you are not blocked until
 then: without a session the scanner falls back to free end-of-day data, so you
 can decide whether it is worth paying for.
 
-**Nothing checks the signals are honest.** 44 tests, and the important ones try
+**Nothing checks the signals are honest.** 64 tests, and the important ones try
 to prove the engine cannot see the future: truncate the input and signals must
 be unchanged; replace every bar after date *T* with noise and everything up to
 *T* must be bit-identical.
@@ -151,8 +151,29 @@ point-in-time universe:
 | Same universe, no timing rule at all | 11.90% |
 
 It also sits at the **28th percentile** of a random-entry null with the same
-trade count and holding periods. 95% of gross trading gains went to charges, and
-67% of the remaining profit was dividends the strategy did nothing to earn.
+trade count and holding periods.
+
+Where the money went, on closed trades across the full 15.6 years, starting
+from ₹10,00,000:
+
+| | ₹ |
+|---|---|
+| gross trading gains | 3,40,861 |
+| less charges and slippage | −3,23,801 |
+| **left over from actually trading** | **17,060** |
+| plus dividends, which the rule did nothing to earn | +2,31,568 |
+| net profit | 2,48,628 |
+
+Charges took **95%** of the gross gains. What the timing rule itself earned in
+fifteen and a half years — after costs, before dividends — was ₹17,060 on ₹10
+lakh. Almost all of the reported profit is dividends you would have collected by
+holding the same stocks and never trading at all.
+
+Every figure there comes from
+[`out/trades_S3_pit.csv`](https://github.com/sachincse/zerodha-algo/blob/main/out/trades_S3_pit.csv),
+which is committed so you can add up the columns yourself.
+
+Full method, artifacts and the leak tests: **[sachincse/zerodha-algo](https://github.com/sachincse/zerodha-algo)**.
 
 The scanner is a useful lens on what is moving. It is not a reason to trade.
 
@@ -181,7 +202,7 @@ core/     spec.py (the DSL) · nl.py (English → spec) · engine.py (causal
 server/   FastAPI; serves /api and the built SPA from one process
           kite_client.py · jobs.py · llm/ (12 providers) · routes/
 web/      React + Vite dashboard
-tests/    44 tests, mostly attempts to break the causality guarantee
+tests/    64 tests, mostly attempts to break the causality guarantee
 tools/    record_app.py · narration.py · build_video.py — the tutorial
           video is generated from source, not hand-edited
 docs/     SETUP.md · API_SPEC.md · the tutorial video

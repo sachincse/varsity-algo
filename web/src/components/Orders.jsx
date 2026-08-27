@@ -199,14 +199,24 @@ export default function Orders({ config, scan, onConfigChange }) {
 
       <div className="panel">
         <h2>Before you act on any of this</h2>
-        <p className="sub" style={{ marginBottom: 0 }}>
-          This exact rule — SMA 6/30 on the Nifty 100 — was backtested over
-          2011&ndash;2026 with next-open fills, full Zerodha charges, 25 bps of
-          slippage and a point-in-time universe. It returned <strong>1.9% a
-          year against the index's 10.7%</strong>, lost to random entries of the
-          same length in the same universe, and spent most of fifteen years
-          under water. The scanner is a useful lens on what is moving. It is not
-          a reason to trade.
+        <p className="sub">
+          SMA 6/30, the rule this scanner ships with, was backtested over
+          2011&ndash;2026 with next-open fills, full Zerodha charges and 25 bps
+          of slippage. It returned <strong>1.9% a year against the index's
+          10.7%</strong>, lost to random entries of the same length in the same
+          universe, and spent most of fifteen years under water. The scanner is
+          a useful lens on what is moving. It is not a reason to trade.
+        </p>
+        <p className="muted" style={{ marginBottom: 0 }}>
+          Two honest differences between that test and this sheet. It ran on a{' '}
+          <strong>point-in-time top-100-by-turnover</strong> universe rebuilt as
+          liquidity changed, not on today's Nifty 100 membership — the two
+          overlap by roughly two thirds. And it entered only on the crossover
+          day itself, whereas this sheet will offer a signal that fired up to
+          your Lookback setting ago. Neither difference flatters the backtest,
+          but it is not the identical rule.{' '}
+          <a href="https://github.com/sachincse/zerodha-algo" target="_blank"
+             rel="noreferrer">Method and artifacts</a>.
         </p>
       </div>
     </>
