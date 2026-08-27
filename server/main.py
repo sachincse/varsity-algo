@@ -35,7 +35,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S")
 log = logging.getLogger("varsity")
 
-from server.routes import health, kite, llm, scan, trade  # noqa: E402
+from server.routes import bars, health, kite, llm, scan, trade  # noqa: E402
 
 
 @asynccontextmanager
@@ -89,6 +89,7 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(kite.router, prefix="/api/kite", tags=["kite"])
 app.include_router(llm.router, prefix="/api/llm", tags=["llm"])
 app.include_router(scan.router, prefix="/api/scan", tags=["scan"])
+app.include_router(bars.router, prefix="/api/bars", tags=["bars"])
 app.include_router(trade.router, prefix="/api/trade", tags=["trade"])
 
 # Serve the built SPA when it exists. FastAPI checks path operations first, so

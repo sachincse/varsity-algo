@@ -77,5 +77,8 @@ export const api = {
   tradeStatus: () => request('/api/trade/status'),
   preview: (payload) => post('/api/trade/preview', payload),
   place: (payload) => post('/api/trade/place', payload),
+  bars: (symbol, { count = 260, short = 0, long = 0 } = {}) =>
+    request(`/api/bars?symbol=${encodeURIComponent(symbol)}`
+            + `&count=${count}&short=${short}&long=${long}`),
   orderStatus: (id) => request(`/api/trade/order/${encodeURIComponent(id)}`),
 }

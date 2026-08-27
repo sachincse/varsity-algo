@@ -35,17 +35,33 @@ export default function Orders({ config, scan, onConfigChange }) {
       `This sends money to the market. There is no undo.`)) return
 
     setPlacing(order.confirm_token); setErr('')
+    const body = {
+      tradingsymbol: order.tradingsymbol,
+      exchange: order.exchange,
+      transaction_type: order.transaction_type,
+      quantity: order.quantity,
+      product: order.product,
+      order_type: order.order_type,
+      confirm_token: order.confirm_token,
+      confirm: 'CONFIRM',
+      est_price: order.est_price,
+    }
     try {
-      const r = await api.place({
-        tradingsymbol: order.tradingsymbol,
-        exchange: order.exchange,
-        transaction_type: order.transaction_type,
-        quantity: order.quantity,
-        product: order.product,
-        order_type: order.order_type,
-        confirm_token: order.confirm_token,
-        confirm: 'CONFIRM',
-      })
+      let r
+      try {
+        r = await api.place(body)
+      } catch (e) {
+        // The server refuses an order above the size limit until it is
+        // acknowledged separately. Asking here — with the number in the
+        // question — is the whole point of that lock; auto-retrying without
+        // asking would delete it.
+        if (!/over the/i.test(e.message) || !/limit/i.test(e.message)) throw e
+        if (!window.confirm(`${e.message}\n\nSend it anyway?`)) {
+          setResults(p => ({ ...p, [order.confirm_token]: { error: 'Not sent.' } }))
+          return
+        }
+        r = await api.place({ ...body, acknowledge_large: true })
+      }
       setResults(p => ({ ...p, [order.confirm_token]: r }))
       onConfigChange()
     } catch (e) {

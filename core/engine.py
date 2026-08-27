@@ -198,7 +198,12 @@ def run_spec(spec: StrategySpec, panel: dict,
     close = panel["close"]
     if asof is None:
         asof = close.index[-1]
-    panel = {k: v.loc[:asof] for k, v in panel.items()}
+    # The loader attaches metadata alongside the price frames — "_missing" is
+    # a plain list of symbols it could not fetch. Slicing blindly assumed every
+    # value was a frame and crashed on it, which nothing noticed because the
+    # scan path leaves asof unset and skips this line entirely.
+    panel = {k: (v.loc[:asof] if isinstance(v, pd.DataFrame) else v)
+             for k, v in panel.items()}
     close = panel["close"]
     if close.empty:
         return pd.DataFrame()

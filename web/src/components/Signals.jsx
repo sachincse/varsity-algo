@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Chart from './Chart'
 import { api } from '../api'
 
 // The signals tab from the video: short SMA, long SMA, lookback and max, a
@@ -30,6 +31,7 @@ export default function Signals({ spec, summary, scan, onScan, onSpec, goToOrder
   const [err, setErr] = useState('')
   const [refresh, setRefresh] = useState(false)
   const [prog, setProg] = useState(null)
+  const [chartFor, setChartFor] = useState(null)
 
   useEffect(() => {
     const c = readCross(spec)
@@ -210,7 +212,10 @@ export default function Signals({ spec, summary, scan, onScan, onSpec, goToOrder
                   <tbody>
                     {scan.signals.map(s => (
                       <tr key={`${s.symbol}-${s.side}`}
-                          className={s.bars_since === 0 ? 'fresh' : ''}>
+                          className={s.bars_since === 0 ? 'fresh' : ''}
+                          onClick={() => setChartFor(s)}
+                          title={`Chart ${s.symbol}`}
+                          style={{ cursor: 'pointer' }}>
                         <td><strong>{s.symbol}</strong></td>
                         <td>
                           <span className={`tag ${s.side === 'ENTRY' ? 'entry' : 'exit'}`}>
@@ -231,6 +236,14 @@ export default function Signals({ spec, summary, scan, onScan, onSpec, goToOrder
                   </tbody>
                 </table>
               </div>
+
+              {chartFor && (
+                <Chart symbol={chartFor.symbol}
+                       short={shortMa} long={longMa}
+                       signalDate={chartFor.signal_date}
+                       side={chartFor.side}
+                       onClose={() => setChartFor(null)} />
+              )}
 
               <div className="msg warn" style={{ marginTop: 18 }}>
                 <strong>A BEARISH row is a sell signal for something you already

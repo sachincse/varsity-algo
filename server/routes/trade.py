@@ -2,7 +2,7 @@
 
 THE SAFETY MODEL, STATED PLAINLY
 Placing an order is the only irreversible thing this program does, so it is the
-only thing behind three separate locks:
+only thing behind five separate locks:
 
   1. ENABLE_TRADING must be true in .env. Default is false. Turning it on is a
      deliberate act performed in a text editor, not a click.
@@ -10,6 +10,12 @@ only thing behind three separate locks:
      bound to the EXACT order — symbol, side, quantity, product. Change any of
      those and the token no longer matches.
   3. The request must carry that token plus the literal word CONFIRM.
+  4. The token expires after TOKEN_TTL seconds.
+  5. An order worth more than LARGE_ORDER_VALUE needs a separate
+     acknowledgement. The first four locks are all binary and none of them
+     notices SIZE: a fat-fingered quantity is correctly signed, correctly
+     confirmed, comfortably unexpired, and sails through every other check.
+     This is the lock that asks whether you meant that many shares.
 
 The token also expires. If you preview a basket, go to lunch, and come back,
 the prices that justified those orders are stale and the tokens are dead. That
@@ -207,6 +213,21 @@ def preview(body: PreviewBody) -> dict:
     }
 
 
+def large_order_threshold() -> float:
+    """Order value above which a separate acknowledgement is required.
+
+    The other four locks are all binary — armed or not, signed or not, expired
+    or not, confirmed or not. None of them notices SIZE. A fat-fingered
+    quantity produces an order that is correctly signed, correctly confirmed
+    and comfortably inside its expiry, and every existing guard waves it
+    through. This is the one that asks "did you mean this many?".
+    """
+    try:
+        return float(os.getenv("LARGE_ORDER_VALUE", "50000"))
+    except ValueError:
+        return 50_000.0
+
+
 class PlaceBody(BaseModel):
     tradingsymbol: str = Field(min_length=1, max_length=30)
     exchange: str = "NSE"
@@ -217,6 +238,19 @@ class PlaceBody(BaseModel):
     price: float | None = None
     confirm_token: str
     confirm: str = Field(description="Must be the literal string CONFIRM")
+    est_price: float | None = Field(
+        default=None,
+        description="The price the order sheet showed. Used to value a MARKET "
+                    "order, which has no price of its own.")
+    acknowledge_large: bool = Field(
+        default=False,
+        description="Required when the order's value exceeds LARGE_ORDER_VALUE "
+                    "(default 50,000).")
+
+    def est_value(self) -> float | None:
+        """Best available estimate of what this order is worth."""
+        px = self.price if self.order_type == "LIMIT" else self.est_price
+        return float(px) * self.quantity if px else None
 
 
 @router.post("/place")
@@ -238,6 +272,23 @@ def place(body: PlaceBody) -> dict:
     if body.order_type == "LIMIT" and not body.price:
         raise HTTPException(status_code=400,
                             detail="a LIMIT order needs a price")
+
+    # Lock 5: size. Deliberately checked AFTER the signature, so that altering
+    # the quantity to slip under the threshold invalidates the token first.
+    limit = large_order_threshold()
+    value = body.est_value()
+    if value is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Send est_price (the price the order sheet showed) so the "
+                   "order's value can be checked against the size limit.")
+    if value > limit and not body.acknowledge_large:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This order is worth about Rs {value:,.0f}, over the "
+                   f"Rs {limit:,.0f} limit. If that is deliberate, send "
+                   f"acknowledge_large=true. Raise the bar permanently with "
+                   f"LARGE_ORDER_VALUE in .env.")
 
     try:
         k = SESSION.client()

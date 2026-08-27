@@ -39,6 +39,22 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -q
 
+      # The look-ahead checker is only worth shipping if it actually catches a
+      # look-ahead. --selftest injects one and requires the checks to go red;
+      # the first time it ran they did not, because comparing signal identity
+      # misses a uniform shift that moves the numbers but not the crossover
+      # days.
+      #
+      # This step FETCHES FROM YAHOO, so unlike everything else in this job it
+      # depends on a third party being up. Run on one matrix leg only, and
+      # non-blocking: a Yahoo outage should not turn the branch red, and a
+      # green run that silently skipped would be worse than a visible skip.
+      # The real gate is running it locally before changing the engine.
+      - name: The look-ahead checker catches a real look-ahead
+        if: runner.os != 'Windows' && matrix.python == '3.12'
+        continue-on-error: true
+        run: python tools/lookahead_check.py --selftest --symbols 12 --bars 320
+
       # The engine must be importable and the app must construct without any
       # credentials at all — that is the whole promise of "no keys needed to
       # scan", and it is easy to break by moving a config read to import time.

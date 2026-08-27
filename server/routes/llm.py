@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from core.nl import (UnsupportedStrategy, build_messages, compile_flat,
                      flat_schema)
+from core.explain import explain, lint
 from core.spec import VARSITY_DEFAULT, StrategySpec
 from server.llm.base import LLMError, generate_with_repair
 from server.llm.registry import CATALOG, build_provider, survey
@@ -81,6 +82,12 @@ def strategy_from_text(body: DescribeBody) -> dict:
     return {
         "spec": spec.model_dump(mode="json"),
         "summary": spec.describe(),
+        # The round trip back to English. The notation summary above asks the
+        # user to check what they typed; this asks them to check what was
+        # UNDERSTOOD, which is the thing a model can get wrong while still
+        # producing a spec that validates.
+        "explanation": explain(spec),
+        "lint": [{"level": n.level, "message": n.message} for n in lint(spec)],
         "warning": warning,
         "meta": {"provider": result.provider, "model": result.model,
                  "repaired": result.repaired, "usage": result.usage},
@@ -92,7 +99,11 @@ def default_strategy() -> dict:
     """The video's own strategy, with no LLM call — so the app is usable with
     no API key at all."""
     return {"spec": VARSITY_DEFAULT.model_dump(mode="json"),
-            "summary": VARSITY_DEFAULT.describe(), "warning": "",
+            "summary": VARSITY_DEFAULT.describe(),
+            "explanation": explain(VARSITY_DEFAULT),
+            "lint": [{"level": n.level, "message": n.message}
+                     for n in lint(VARSITY_DEFAULT)],
+            "warning": "",
             "meta": {"provider": "builtin", "model": "none"}}
 
 

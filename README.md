@@ -127,7 +127,7 @@ connect — same data, same broker, same chart. But you are not blocked until
 then: without a session the scanner falls back to free end-of-day data, so you
 can decide whether it is worth paying for.
 
-**Nothing checks the signals are honest.** 64 tests, and the important ones try
+**Nothing checks the signals are honest.** 83 tests, and the important ones try
 to prove the engine cannot see the future: truncate the input and signals must
 be unchanged; replace every bar after date *T* with noise and everything up to
 *T* must be bit-identical.
@@ -202,7 +202,7 @@ core/     spec.py (the DSL) · nl.py (English → spec) · engine.py (causal
 server/   FastAPI; serves /api and the built SPA from one process
           kite_client.py · jobs.py · llm/ (12 providers) · routes/
 web/      React + Vite dashboard
-tests/    64 tests, mostly attempts to break the causality guarantee
+tests/    83 tests, mostly attempts to break the causality guarantee
 tools/    record_app.py · narration.py · build_video.py — the tutorial
           video is generated from source, not hand-edited
 docs/     SETUP.md · API_SPEC.md · the tutorial video
@@ -233,3 +233,79 @@ accent.
 
 MIT — see [LICENSE](LICENSE). Not financial advice. You are responsible for
 every order you approve.
+
+---
+
+## Checking a strategy you wrote yourself
+
+The engine's causality is covered by tests, but those tests use fixed
+strategies. They say nothing about a rule you invented this morning — and a
+strategy is where look-ahead most easily creeps in.
+
+```bash
+python tools/lookahead_check.py                       # the shipped default
+python tools/lookahead_check.py --spec my.json
+python tools/lookahead_check.py --text "golden cross on the nifty 500"
+```
+
+Four checks: signals computed on truncated data must match signals computed at
+the same as-of date on full data; scrambling every bar after date T must leave
+everything before T untouched; the **indicator series itself** must be
+identical at the as-of bar with and without the future present; and recomputing
+from three different start dates must give the same recent signals.
+
+The third check exists because of the fourth flag:
+
+```bash
+python tools/lookahead_check.py --selftest
+```
+
+That deliberately shifts every moving average one bar into the future and
+requires the checks to go red. The first time it ran, they did not — a uniform
+shift moves the *numbers* without moving the crossover *days*, so comparing
+signal identity sailed straight past a broken engine. A checker nobody has
+tried to fool is not evidence.
+
+## The five locks on placing an order
+
+| Lock | What it does |
+|---|---|
+| `ENABLE_TRADING=false` | The default. Placement is refused outright until you change it in `.env`. |
+| Signed preview | An HMAC bound to symbol, side, quantity, product and order type. Alter any of them and it is rejected. |
+| 3-minute expiry | A preview goes stale. Walk away and come back, you preview again. |
+| Typed `CONFIRM` | The request must carry the literal word. |
+| **Size** | An order worth more than `LARGE_ORDER_VALUE` (default ₹50,000) needs a separate acknowledgement. |
+
+The fifth is there because the other four are all binary — armed or not, signed
+or not, expired or not, confirmed or not. **None of them notices size.** A
+fat-fingered quantity produces an order that is correctly signed, correctly
+confirmed, comfortably unexpired, and sails through every other check. It is
+deliberately checked *after* the signature, so trimming the quantity to slip
+under the threshold invalidates the token first.
+
+## Plain English, both ways
+
+The Strategy tab compiles what you type into a validated schema, then compiles
+it **back into English**:
+
+> Every day, look at the 100 largest stocks on the NSE, using daily prices. Buy
+> a stock when its 6-day average price rises above its 30-day average price.
+> Sell it again when its 6-day average price falls below its 30-day average
+> price. Selling here means closing a position you already hold — it is never a
+> short.
+
+Restating your own notation confirms nothing. A model that reads *"under 70"* as
+*"over 70"* produces a spec that validates perfectly and describes itself in
+notation you will nod along to. The round trip through different words is what
+catches it.
+
+A separate linter asks whether a valid strategy is *sensible*: identical buy and
+sell rules, an RSI threshold outside 0–100 that can never fire, a 500-stock scan
+truncated to 5 rows, a missing liquidity filter.
+
+## Charts
+
+Click any row in the Signals table to see the candles with both moving averages
+drawn over them, and an arrow on the bar the crossover actually fired. The
+series come from the same panel the scan used, so the chart cannot disagree with
+the row that opened it.

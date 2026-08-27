@@ -14,6 +14,8 @@ export default function Strategy({ config, spec, summary, onSpec, goToSignals })
   const [err, setErr] = useState('')
   const [warning, setWarning] = useState('')
   const [meta, setMeta] = useState(null)
+  const [plain, setPlain] = useState('')
+  const [notes, setNotes] = useState([])
 
   const llmReady = config?.llm?.providers?.some(p => p.key === config.llm.active && p.configured)
 
@@ -23,6 +25,7 @@ export default function Strategy({ config, spec, summary, onSpec, goToSignals })
     try {
       const r = await api.strategyFromText(text)
       onSpec(r.spec, r.summary)
+      setPlain(r.explanation || ''); setNotes(r.lint || [])
       setWarning(r.warning || '')
       setMeta(r.meta)
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
@@ -33,6 +36,7 @@ export default function Strategy({ config, spec, summary, onSpec, goToSignals })
     try {
       const r = await api.defaultStrategy()
       onSpec(r.spec, r.summary)
+      setPlain(r.explanation || ''); setNotes(r.lint || [])
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
@@ -101,6 +105,17 @@ export default function Strategy({ config, spec, summary, onSpec, goToSignals })
                 {meta.repaired && ' (needed one correction round)'}.</>
             )}
           </p>
+          {plain && (
+            <div className="msg info" style={{ marginBottom: 14 }}>
+              <strong>In plain English:</strong> {plain}
+            </div>
+          )}
+          {notes.map((n, i) => (
+            <div key={i} className={n.level === 'warn' ? 'msg err' : 'msg info'}
+                 style={{ marginBottom: 10 }}>
+              {n.message}
+            </div>
+          ))}
           <div className="spec">{summary}</div>
           <details style={{ marginTop: 14 }}>
             <summary className="muted" style={{ cursor: 'pointer' }}>

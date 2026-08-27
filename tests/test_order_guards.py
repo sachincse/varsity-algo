@@ -44,10 +44,14 @@ def armed(monkeypatch):
     return TestClient(app)
 
 
+EST_PRICE = 1_500.0          # 10 x 1,500 = 15,000, under the 50,000 default
+
+
 def payload(**over):
     body = dict(ORDER)
     body["confirm_token"] = trade._mint(dict(ORDER))
     body["confirm"] = "CONFIRM"
+    body["est_price"] = EST_PRICE
     body.update(over)
     return body
 
@@ -165,3 +169,55 @@ def test_each_guard_fails_differently(armed, monkeypatch):
     assert len(set(reasons.values())) == len(reasons), (
         "guards are indistinguishable, so some are not really being tested: "
         f"{reasons}")
+
+
+# --------------------------------------------------------------------------
+# lock 5: size
+# --------------------------------------------------------------------------
+
+def test_an_ordinary_order_is_not_challenged(armed):
+    """10 x 1,500 = 15,000, comfortably under the default limit."""
+    r = armed.post("/api/trade/place", json=payload())
+    assert r.status_code == 401          # reached the broker, no size challenge
+
+
+def test_a_large_order_is_challenged(armed):
+    """Same order, a price that makes it worth more than the threshold."""
+    r = armed.post("/api/trade/place", json=payload(est_price=20_000.0))
+    assert r.status_code == 409
+    d = detail(r)
+    assert "200,000" in d and "50,000" in d, d
+
+
+def test_a_large_order_proceeds_once_acknowledged(armed):
+    r = armed.post("/api/trade/place",
+                   json=payload(est_price=20_000.0, acknowledge_large=True))
+    assert r.status_code == 401, detail(r)
+
+
+def test_an_unvalued_order_is_refused(armed):
+    """A MARKET order carries no price of its own. Without est_price the size
+    lock cannot run, and silently skipping it would be worse than refusing."""
+    body = payload()
+    body.pop("est_price")
+    r = armed.post("/api/trade/place", json=body)
+    assert r.status_code == 400
+    assert "est_price" in detail(r)
+
+
+def test_the_threshold_is_configurable(armed, monkeypatch):
+    monkeypatch.setenv("LARGE_ORDER_VALUE", "10000")
+    r = armed.post("/api/trade/place", json=payload())   # 15,000 > 10,000 now
+    assert r.status_code == 409
+
+
+def test_shrinking_the_quantity_to_dodge_the_limit_breaks_the_signature(armed):
+    """The size lock sits AFTER the signature check on purpose.
+
+    Someone trimming the quantity to slip under the threshold does not get a
+    quieter path to placement — they get a token that no longer matches, which
+    is the louder failure of the two.
+    """
+    r = armed.post("/api/trade/place", json=payload(quantity=1, est_price=20_000.0))
+    assert r.status_code in (400, 403)
+    assert "does not match" in detail(r).lower()
