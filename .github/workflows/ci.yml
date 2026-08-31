@@ -55,6 +55,35 @@ jobs:
         continue-on-error: true
         run: python tools/lookahead_check.py --selftest --symbols 12 --bars 320
 
+      # Test counts in prose rot silently: they were 44, then 64, then 83, then
+      # 95, and docs/SETUP.md told a correctly-installed user to expect a
+      # number that had been wrong for three commits - i.e. it told a working
+      # install it was broken. Assert the docs against reality instead.
+      - name: Documented test counts match the suite
+        if: runner.os != 'Windows' && matrix.python == '3.12'
+        shell: python
+        run: |
+          import pathlib, re, subprocess, sys
+          out = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-q",
+                                "--collect-only"], capture_output=True, text=True).stdout
+          m = re.search(r"(\d+) tests collected", out)
+          assert m, out[-2000:]
+          n = int(m.group(1))
+          print(f"suite collects {n} tests")
+
+          bad = []
+          for rel in ("README.md", "docs/SETUP.md"):
+              text = pathlib.Path(rel).read_text(encoding="utf-8")
+              for claimed in re.findall(r"\*\*(\d+) passed\*\*|# (\d+) passed|(\d+) tests,", text):
+                  v = next((int(x) for x in claimed if x), None)
+                  if v is not None and v != n:
+                      bad.append(f"{rel}: claims {v}, suite has {n}")
+          if bad:
+              for b in bad:
+                  print(b)
+              raise SystemExit(1)
+          print("every documented count agrees")
+
       # The engine must be importable and the app must construct without any
       # credentials at all — that is the whole promise of "no keys needed to
       # scan", and it is easy to break by moving a config read to import time.

@@ -641,7 +641,7 @@ def main() -> None:
          body="The scanner is genuinely useful for seeing what is moving. "
               "The machinery around it \u2014 cost modelling, leak-free testing, "
               "order guardrails \u2014 is the part worth keeping.",
-         bullets=["83 tests, including a future-scramble causality proof",
+         bullets=["A causality suite whose own tests are mutation-tested",
                   "Backtest, artifacts and method:",
                   "github.com/sachincse/zerodha-algo"])
     add_named("s11", still_clip(WORK / "s11.mp4", WORK / "c11.png", want("s11", 9.5)))

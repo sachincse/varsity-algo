@@ -253,7 +253,26 @@ class PlaceBody(BaseModel):
         return float(px) * self.quantity if px else None
 
 
-@router.post("/place")
+@router.post(
+    "/place",
+    # Spelled out so /docs shows every way this refuses. An integrator hitting
+    # the API directly would otherwise meet the 409 size lock blind — it is the
+    # only refusal that asks for an extra field rather than a corrected one.
+    responses={
+        400: {"description": "Wrong confirmation word, a LIMIT order without a "
+                             "price, a tampered or expired token, or a MARKET "
+                             "order sent without est_price so its value cannot "
+                             "be checked."},
+        401: {"description": "No Kite session. Every guard passed; nothing was "
+                             "sent to the broker."},
+        403: {"description": "ENABLE_TRADING is not 'true'. This is the default "
+                             "and is checked before anything else, so a "
+                             "malformed order gets this same response."},
+        409: {"description": "Order value exceeds LARGE_ORDER_VALUE (default "
+                             "50,000). Re-send with acknowledge_large=true if "
+                             "it is deliberate."},
+    },
+)
 def place(body: PlaceBody) -> dict:
     """Place exactly one order. Every guard must pass."""
     if not trading_enabled():

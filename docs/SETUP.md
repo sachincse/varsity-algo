@@ -108,7 +108,7 @@ To check everything installed correctly:
 .\.venv\Scripts\python.exe -m pytest tests\ -q
 ```
 
-You should see **44 passed**. Those tests prove the engine cannot see future
+You should see **95 passed**. Those tests prove the engine cannot see future
 prices — worth running once, since you are about to trust it.
 
 ---
@@ -238,11 +238,19 @@ Order placement is **off by default**. To turn it on:
 ENABLE_TRADING=true
 ```
 
-and restart the backend. Then every order still requires:
+and restart the backend. That is lock 1 of 5. Every order then still requires:
 
-1. a preview, which mints a token bound to that exact order
-2. the token to still be valid (3 minutes)
-3. a browser confirmation dialog naming the symbol and quantity
+2. a preview, which mints a signed token bound to that exact order — symbol,
+   exchange, side, quantity, product and order type. Change any of them and the
+   token no longer matches.
+3. the token to still be valid — it expires after 3 minutes, because the prices
+   that justified the order are stale by then
+4. the request to carry the literal string `CONFIRM`. This is checked on the
+   **server**, so it is not the browser dialog — a direct POST cannot skip it.
+5. a separate acknowledgement (`acknowledge_large`) for any order worth more
+   than `LARGE_ORDER_VALUE`, default ₹50,000. The server refuses with **HTTP
+   409** until you send it. The first four locks are all binary and none of
+   them notices size, so a fat-fingered quantity clears every one of them.
 
 Orders go one at a time. There is deliberately no "place all" button.
 

@@ -127,7 +127,7 @@ connect — same data, same broker, same chart. But you are not blocked until
 then: without a session the scanner falls back to free end-of-day data, so you
 can decide whether it is worth paying for.
 
-**Nothing checks the signals are honest.** 83 tests, and the important ones try
+**Nothing checks the signals are honest.** 95 tests, and the important ones try
 to prove the engine cannot see the future: truncate the input and signals must
 be unchanged; replace every bar after date *T* with noise and everything up to
 *T* must be bit-identical.
@@ -189,13 +189,18 @@ The scanner is a useful lens on what is moving. It is not a reason to trade.
 ## Safety model for orders
 
 Placing an order is the only irreversible thing this program does, so it sits
-behind four locks:
+behind **five** locks — set out in full, with what each one catches, in
+[The five locks on placing an order](#the-five-locks-on-placing-an-order):
 
 1. `ENABLE_TRADING=true` in `.env` — a deliberate act in a text editor
 2. a preview that mints a one-time token bound to the exact symbol, side,
-   quantity and product
+   quantity, product and order type
 3. that token expiring after three minutes, because the prices behind it go stale
-4. a browser confirmation naming the order
+4. the request carrying the literal string `CONFIRM` — checked server-side, so
+   a direct POST cannot skip it the way it can skip the browser dialog
+5. a separate acknowledgement for any order worth more than
+   `LARGE_ORDER_VALUE` (default ₹50,000), because the other four are all
+   binary and none of them notices size
 
 Orders go one at a time. There is no "place all".
 
@@ -209,7 +214,7 @@ core/     spec.py (the DSL) · nl.py (English → spec) · engine.py (causal
 server/   FastAPI; serves /api and the built SPA from one process
           kite_client.py · jobs.py · llm/ (12 providers) · routes/
 web/      React + Vite dashboard
-tests/    83 tests, mostly attempts to break the causality guarantee
+tests/    95 tests, mostly attempts to break the causality guarantee
 tools/    record_app.py · narration.py · build_video.py — the tutorial
           video is generated from source, not hand-edited
 docs/     SETUP.md · API_SPEC.md · the tutorial video
@@ -218,7 +223,7 @@ docs/     SETUP.md · API_SPEC.md · the tutorial video
 ## Development
 
 ```bash
-python -m pytest tests/ -q          # 44 passed
+python -m pytest tests/ -q          # 95 passed
 cd web && npm run dev               # hot-reload frontend on :5173
 python -m uvicorn server.main:app --reload --port 8000
 ```

@@ -65,11 +65,41 @@ def detail(r) -> str:
 # the outer gate
 # --------------------------------------------------------------------------
 
-def test_disabled_by_default(monkeypatch):
+def test_disabled_when_the_variable_is_absent(monkeypatch):
     monkeypatch.delenv("ENABLE_TRADING", raising=False)
     r = TestClient(app).post("/api/trade/place", json=payload())
     assert r.status_code == 403
     assert "disabled" in detail(r).lower()
+
+
+@pytest.mark.parametrize("value", ["false", "False", "FALSE", " false ",
+                                   "0", "no", "off", ""])
+def test_disabled_for_every_value_that_is_not_true(monkeypatch, value):
+    """Deleting the variable is NOT the case that ships.
+
+    .env.example sets ENABLE_TRADING=false, so the shipped state is the string
+    "false", not an absent key. Testing only the absent case leaves the gate
+    unguarded against the obvious regression: rewrite trading_enabled() as
+    bool(os.getenv("ENABLE_TRADING")) and every non-empty value becomes truthy
+    — live trading arms itself on the shipped default and the suite stays
+    green, because the only test deleted the variable first.
+    """
+    monkeypatch.setenv("ENABLE_TRADING", value)
+    r = TestClient(app).post("/api/trade/place", json=payload())
+    assert r.status_code == 403, (
+        f"ENABLE_TRADING={value!r} must NOT arm trading, got {r.status_code}")
+    assert "disabled" in detail(r).lower()
+
+
+@pytest.mark.parametrize("value", ["true", "True", "TRUE", " true "])
+def test_only_true_arms_it(monkeypatch, value):
+    """The other direction. Without this, a gate that refused everything would
+    satisfy the test above while making the feature unusable."""
+    monkeypatch.setenv("ENABLE_TRADING", value)
+    monkeypatch.setattr(trade.SESSION, "is_live", lambda: False, raising=False)
+    r = TestClient(app).post("/api/trade/place", json=payload())
+    assert r.status_code != 403, f"ENABLE_TRADING={value!r} should arm trading"
+    assert r.status_code == 401      # reached the broker, which is absent
 
 
 # --------------------------------------------------------------------------
