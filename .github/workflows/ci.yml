@@ -191,14 +191,39 @@ jobs:
             throw "the launcher shelled out to a Unix tool that shadowed the Windows one"
           }
 
+      # Deliberately NOT port 8000. The steps above leave a server shutting
+      # down on it, and a socket in TIME_WAIT still refuses a fresh bind — so
+      # this test used to fail on the setup rather than on the thing it tests.
+      # An ephemeral port makes the check independent of everything before it.
       - name: A busy port is explained, not dumped as an errno
         shell: python
         run: |
           import socket, subprocess, sys
-          s = socket.socket(); s.bind(("127.0.0.1", 8000)); s.listen(1)
-          r = subprocess.run([sys.executable, "tools/portcheck.py", "--port", "8000", "--check"],
-                             capture_output=True, text=True)
-          s.close()
+          s = socket.socket()
+          s.bind(("127.0.0.1", 0))          # let the OS pick a free one
+          port = str(s.getsockname()[1])
+          s.listen(1)
+          try:
+              r = subprocess.run(
+                  [sys.executable, "tools/portcheck.py", "--port", port, "--check"],
+                  capture_output=True, text=True)
+          finally:
+              s.close()
           print(r.stdout)
           assert r.returncode != 0, "a taken port must fail the pre-flight"
           assert "already in use" in r.stdout, r.stdout
+          assert port in r.stdout, f"the message should name the port: {r.stdout}"
+
+      # And the other direction: a free port must PASS. Without this the check
+      # above would still pass if portcheck simply always failed.
+      - name: A free port passes the pre-flight
+        shell: python
+        run: |
+          import socket, subprocess, sys
+          s = socket.socket(); s.bind(("127.0.0.1", 0))
+          port = str(s.getsockname()[1]); s.close()
+          r = subprocess.run(
+              [sys.executable, "tools/portcheck.py", "--port", port, "--check"],
+              capture_output=True, text=True)
+          print(r.stdout or "(no output, as expected)")
+          assert r.returncode == 0, f"a free port must pass: {r.stdout}"
