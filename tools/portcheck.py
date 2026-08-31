@@ -41,13 +41,22 @@ def is_listening(host: str, port: int, timeout: float = 0.35) -> bool:
 def can_bind(host: str, port: int) -> bool:
     """True if a server could take this port right now.
 
-    Checked by binding rather than by connecting: a socket in TIME_WAIT, or one
-    held by another user's process, refuses a connection while still preventing
-    a bind. Connecting alone would call that port free and hand the user the
-    errno we are trying to avoid.
+    Checked by binding rather than by connecting: a port held by another
+    process refuses a connection while still preventing a bind, and connecting
+    alone would call that free and hand the user the errno this exists to avoid.
+
+    SO_REUSEADDR is set because UVICORN SETS IT. Without it this check is
+    stricter than the server it is guarding: stop the app and start it again
+    within a minute and the old socket is still in TIME_WAIT, so a plain bind
+    fails even though uvicorn would have started fine. That turned an ordinary
+    restart into a refusal, and CI caught it doing exactly that — the second
+    launcher run died on a port the first run had already released.
+
+    The check must model the real bind, not a stricter one.
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((host, port))
         return True
     except OSError:

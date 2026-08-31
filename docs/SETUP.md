@@ -108,7 +108,7 @@ To check everything installed correctly:
 .\.venv\Scripts\python.exe -m pytest tests\ -q
 ```
 
-You should see **95 passed**. Those tests prove the engine cannot see future
+You should see **100 passed**. Those tests prove the engine cannot see future
 prices — worth running once, since you are about to trust it.
 
 ---

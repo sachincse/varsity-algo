@@ -127,7 +127,7 @@ connect — same data, same broker, same chart. But you are not blocked until
 then: without a session the scanner falls back to free end-of-day data, so you
 can decide whether it is worth paying for.
 
-**Nothing checks the signals are honest.** 95 tests, and the important ones try
+**Nothing checks the signals are honest.** 100 tests, and the important ones try
 to prove the engine cannot see the future: truncate the input and signals must
 be unchanged; replace every bar after date *T* with noise and everything up to
 *T* must be bit-identical.
@@ -214,7 +214,7 @@ core/     spec.py (the DSL) · nl.py (English → spec) · engine.py (causal
 server/   FastAPI; serves /api and the built SPA from one process
           kite_client.py · jobs.py · llm/ (12 providers) · routes/
 web/      React + Vite dashboard
-tests/    95 tests, mostly attempts to break the causality guarantee
+tests/    100 tests, mostly attempts to break the causality guarantee
 tools/    record_app.py · narration.py · build_video.py — the tutorial
           video is generated from source, not hand-edited
 docs/     SETUP.md · API_SPEC.md · the tutorial video
@@ -223,7 +223,7 @@ docs/     SETUP.md · API_SPEC.md · the tutorial video
 ## Development
 
 ```bash
-python -m pytest tests/ -q          # 95 passed
+python -m pytest tests/ -q          # 100 passed
 cd web && npm run dev               # hot-reload frontend on :5173
 python -m uvicorn server.main:app --reload --port 8000
 ```
