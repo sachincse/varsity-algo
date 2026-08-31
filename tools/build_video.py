@@ -632,7 +632,7 @@ def main() -> None:
               "fills, real Zerodha charges and a point-in-time universe:",
          mono=["  the rule, honestly tested      1.92%  a year",
                "  Nifty 100 index fund          10.70%  a year",
-               "  same stocks, no timing rule   11.90%  a year"],
+               "  same stocks, no timing rule   13.65%  a year"],
          accent=SELL)
     add_named("s10", still_clip(WORK / "s10.mp4", WORK / "c10.png", want("s10", 11.0)))
 
@@ -641,8 +641,9 @@ def main() -> None:
          body="The scanner is genuinely useful for seeing what is moving. "
               "The machinery around it \u2014 cost modelling, leak-free testing, "
               "order guardrails \u2014 is the part worth keeping.",
-         bullets=["44 tests, including a future-scramble causality proof",
-                  "Full backtest and evidence in the README"])
+         bullets=["83 tests, including a future-scramble causality proof",
+                  "Backtest, artifacts and method:",
+                  "github.com/sachincse/zerodha-algo"])
     add_named("s11", still_clip(WORK / "s11.mp4", WORK / "c11.png", want("s11", 9.5)))
 
     # ---- 11. end ----------------------------------------------------------
@@ -650,6 +651,9 @@ def main() -> None:
          title="Get it",
          big="\u2193",
          mono=["github.com/sachincse/varsity-algo",
+               "",
+               "# the evidence behind every number in this video",
+               "github.com/sachincse/zerodha-algo",
                "",
                "# setup guide, every error message, and the fix",
                "docs/SETUP.md"])

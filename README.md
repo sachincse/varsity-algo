@@ -148,7 +148,7 @@ point-in-time universe:
 |---|---|
 | SMA 6/30, honestly tested | **1.92%** |
 | Nifty 100 total-return index, net of fees | **10.70%** |
-| Same universe, no timing rule at all | 11.90% |
+| Same universe, no timing rule at all | **13.65%** |
 
 It also sits at the **28th percentile** of a random-entry null with the same
 trade count and holding periods.
@@ -172,6 +172,13 @@ holding the same stocks and never trading at all.
 Every figure there comes from
 [`out/trades_S3_pit.csv`](https://github.com/sachincse/zerodha-algo/blob/main/out/trades_S3_pit.csv),
 which is committed so you can add up the columns yourself.
+
+Two caveats the study measures rather than hides. The **1.92% is sensitive to
+an arbitrary tiebreak** — recency does not separate same-day crossovers, and
+alphabetical-by-symbol was the accidental default. Across four defensible
+tiebreaks the figure spans 0.66% to 2.66%. And the 13.65% no-timing null was
+previously quoted at 11.90%, because it was measured on price return while the
+strategy collected dividends; correcting that made the gap wider, not narrower.
 
 Full method, artifacts and the leak tests: **[sachincse/zerodha-algo](https://github.com/sachincse/zerodha-algo)**.
 
