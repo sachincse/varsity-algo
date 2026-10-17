@@ -7,7 +7,7 @@ pandas>=2.2
 numpy>=1.26
 yfinance>=1.6
 requests>=2.31
-pydantic>=2.9
+pydantic>=2.13.4
 
 # broker
 kiteconnect>=5.2
